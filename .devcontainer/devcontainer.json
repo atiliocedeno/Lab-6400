@@ -1,0 +1,6 @@
+{
+  "name": "Sony Recipe AI — iPhone",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "postCreateCommand": "npm ci",
+  "forwardPorts": [8081]
+}

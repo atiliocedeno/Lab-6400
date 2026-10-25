@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Sony Recipe AI",
+    "slug": "sony-recipe-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "predictiveBackGestureEnabled": false
+    }
+  }
+}
