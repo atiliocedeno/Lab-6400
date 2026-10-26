@@ -1,3 +1,4 @@
+import CameraPanel from './src/camera/CameraPanel';
 import React,{useEffect,useRef,useState} from 'react';
 import {StatusBar} from 'expo-status-bar';
 import {SafeAreaView,ScrollView,View,Text,TextInput,Pressable,StyleSheet,Alert} from 'react-native';
@@ -19,7 +20,7 @@ export default function App(){
  {guide(selected).map((step,i)=><Pressable key={i} accessibilityRole="checkbox" accessibilityState={{checked:done.includes(i)}} onPress={()=>setDone(done.includes(i)?done.filter(n=>n!==i):[...done,i])} style={s.card}><Text style={s.green}>{done.includes(i)?'✓ Completado':`Paso ${i+1}`}</Text><Text style={s.body}>{step}</Text></Pressable>)}
  <Text style={s.muted}>{done.length} / {guide(selected).length} pasos marcados. No se enviaron ajustes a la cámara.</Text>{ready&&<Pressable accessibilityRole="button" style={s.button} onPress={()=>{void toggle(selected);}}><Text style={s.buttonText}>{favorites.includes(selected.id)?'★ Quitar favorito':'☆ Guardar favorito'}</Text></Pressable>}
  </>:<><View style={s.row}>{['Explorar','Favoritos','Cámara'].map(t=><React.Fragment key={t}>{button(t,()=>setTab(t),tab===t)}</React.Fragment>)}</View>
- {tab==='Cámara'?<View style={s.card}><Text style={s.section}>Conexión en investigación</Text><Text style={s.body}>Bluetooth, Wi-Fi y USB no están implementados. No hay comandos remotos verificados para aplicar estas recetas a tu A6400.</Text><Text style={s.body}>Esta versión es un catálogo con guía manual. El procesamiento de fotos y el asistente IA están pendientes.</Text></View>:<>
+ {tab==='Cámara'?<CameraPanel/>:<>
  <TextInput accessibilityLabel="Buscar receta" placeholder="Buscar Portra, Eterna, Cinestill…" placeholderTextColor="#8e989a" value={query} onChangeText={setQuery} style={s.input}/>
  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>{['Todas',...new Set(recipes.map(r=>r.brand))].map(b=><React.Fragment key={b}>{button(b,()=>setBrand(b),brand===b)}</React.Fragment>)}</ScrollView>
  <Text style={s.section}>{filtered.length} recetas · {tab==='Favoritos'?'Tu selección':'Catálogo original'}</Text>{filtered.length===0&&<Text style={s.body}>No hay recetas aquí. Cambia la búsqueda o guarda favoritas.</Text>}

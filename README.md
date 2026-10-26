@@ -58,3 +58,9 @@ https://helpguide.sony.net/ilc/1810/v1/en/index.html
 `python3 scripts/import-recipes.py` regenera JSON desde la fuente incluida.
 `npx tsc --noEmit` comprueba TypeScript.
 `npx expo export --platform ios --platform android` compila los bundles.
+
+## Prueba experimental de Wi-Fi
+
+La pestaña **Cámara** permite consultar funciones de la API antigua de Sony, con timeout de 10 segundos y diagnóstico compartible. Abre la app antes de conectar el iPhone al Wi-Fi de la cámara. No cambia ajustes y aún no se ha validado con hardware. La dirección propuesta es candidata, editable. Consulta `docs/CAMERA_CONNECTIVITY.md` para el procedimiento y las limitaciones.
+
+Pruebas del protocolo: `node tests/camera-probe.cjs`.

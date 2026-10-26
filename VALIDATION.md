@@ -9,3 +9,9 @@ Proyecto actualizado a SDK 58, React 19.3.0 y React Native 0.88.0.
 - Falta prueba en iPhone físico. La compilación no demuestra que el cierre esté resuelto.
 - La conexión ngrok funciona en el Codespace del usuario; desde el entorno de desarrollo previo agotó el tiempo.
 - Cámara y asistente IA pendientes.
+
+## Avance de conectividad
+
+- Pruebas con respuestas simuladas: URL privada, deduplicación, lista vacía, rechazo de respuestas malformadas, errores HTTP/JSON y solicitud exclusivamente de lectura aprobadas.
+- Prueba física de endpoint, permisos iOS, conectividad y métodos en A6400 pendiente.
+- No se afirma conexión real ni aplicación automática de recetas.
