@@ -4,7 +4,7 @@ App React Native / Expo para iOS y Android, interfaz en español. Proyecto indep
 
 ## Abrir desde el mismo iPhone
 
-Esta entrega usa Expo SDK 57 para Expo Go durante la transición SDK 58. Instala la versión actual de Expo Go desde App Store.
+Esta entrega usa Expo SDK 58, correspondiente al cliente Expo Go 58.0.5 del usuario. Instala la versión actual de Expo Go desde App Store.
 
 1. Instala Expo Go desde App Store.
 2. Abre https://codespaces.new/atiliocedeno/Lab-6400 en Safari y crea un Codespace en `main`. Necesitas cuenta GitHub con Codespaces habilitado y cuota disponible.
