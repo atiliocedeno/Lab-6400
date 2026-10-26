@@ -1,0 +1,82 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const ts=require('typescript');
+const {EventEmitter}=require('node:events');
+const cache=new Map(),mocks={};
+function load(file){
+ file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;
+ const mod={exports:{}};cache.set(file,mod);
+ const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+ new Function('require','module','exports',code)(name=>mocks[name]??(name.startsWith('.')?load(path.resolve(path.dirname(file),name+'.ts')):require(name)),mod,mod.exports);
+ return mod.exports;
+}
+const {parseDescription,locationFromSSDP,localURL,request}=load('src/camera/protocol.ts');
+const {SonySession}=load('src/camera/session.ts');
+const xml=`<root><device><manufacturer>Sony Corporation</manufacturer><modelName>ILCE-6400</modelName><friendlyName>My Sony</friendlyName><av:X_ScalarWebAPI_DeviceInfo xmlns:av="urn:schemas-sony-com:av"><av:X_ScalarWebAPI_ServiceList><av:X_ScalarWebAPI_Service><av:X_ScalarWebAPI_ServiceType>camera</av:X_ScalarWebAPI_ServiceType><av:X_ScalarWebAPI_ActionList_URL>http://192.168.5.1:10000/custom</av:X_ScalarWebAPI_ActionList_URL></av:X_ScalarWebAPI_Service></av:X_ScalarWebAPI_ServiceList></av:X_ScalarWebAPI_DeviceInfo></device></root>`;
+const descriptionURL='http://192.168.5.1:60000/device.xml';
+const camera=parseDescription(xml,descriptionURL);
+assert.equal(camera.endpoint,'http://192.168.5.1:10000/custom/camera');
+for(const bad of ['http://8.8.8.8/x','https://192.168.5.1/x','http://user:pass@192.168.5.1/x'])assert.throws(()=>localURL(bad));
+assert.throws(()=>parseDescription(xml.replace('ILCE-6400','ILCE-7M3'),descriptionURL),/Modelo/);
+assert.throws(()=>parseDescription(xml.replace('192.168.5.1:10000','192.168.5.2:10000'),descriptionURL),/local/);
+assert.throws(()=>parseDescription('<!DOCTYPE x>'+xml,descriptionURL),/inválida/);
+assert.throws(()=>parseDescription(xml.replace('>camera<','>avContent<'),descriptionURL),/no anuncia/);
+assert.equal(locationFromSSDP(`HTTP/1.1 200 OK\r\nLOCATION: ${descriptionURL}\r\n`,'192.168.5.1'),descriptionURL);
+assert.equal(locationFromSSDP(`HTTP/1.1 200 OK\r\nLOCATION: ${descriptionURL}\r\n`,'192.168.5.2'),null);
+const originalFetch=global.fetch,originalTimeout=global.setTimeout;
+let methods=['getAvailableApiList','getAvailableIsoSpeedRate','getIsoSpeedRate','setIsoSpeedRate','actTakePicture','getAvailableWhiteBalance','getWhiteBalance','setWhiteBalance','getAvailableExposureCompensation','getExposureCompensation','setExposureCompensation'];
+let iso='100',wb={whiteBalanceMode:'Auto WB',colorTemperature:-1},ev=0,step=1,calls=[],failExposure=false;
+let failWrite=false;
+global.fetch=async(url,init)=>{
+ if(!init.body)return {ok:true,text:async()=>xml};
+ const {method,params,id}=JSON.parse(init.body);calls.push({method,params});
+ let result;
+ switch(method){
+  case 'getAvailableApiList':result=[methods];break;
+  case 'getAvailableIsoSpeedRate':result=[iso,['100','200']];break;
+  case 'getIsoSpeedRate':result=[iso];break;
+  case 'setIsoSpeedRate':if(!failWrite)iso=params[0];result=[0];break;
+  case 'actTakePicture':result=[['http://192.168.5.1/photo.jpg']];break;
+  case 'getAvailableWhiteBalance':result=[wb,[{whiteBalanceMode:'Auto WB',colorTemperatureRange:[]},{whiteBalanceMode:'Color Temperature',colorTemperatureRange:[9900,2500,100]}]];break;
+  case 'setWhiteBalance':wb={whiteBalanceMode:params[0],colorTemperature:params[1]?params[2]:-1};result=[0];break;
+  case 'getWhiteBalance':result=[wb];break;
+  case 'getAvailableExposureCompensation':result=[ev,6,-6,step];break;
+  case 'setExposureCompensation':if(failExposure)return {ok:true,text:async()=>JSON.stringify({id,error:[12,'Not available']})};ev=params[0];result=[0];break;
+  case 'getExposureCompensation':result=[ev];break;
+  default:throw Error('Unexpected '+method);
+ }
+ return {ok:true,text:async()=>JSON.stringify({id,result})};
+};
+(async()=>{
+ const s=new SonySession(camera);await s.connect();assert.equal((await s.readControls()).length,1);
+ await s.setControl('IsoSpeedRate','200');assert.equal(iso,'200');
+ await assert.rejects(s.setControl('IsoSpeedRate','999'),/disponible/);
+ await assert.rejects(s.setControl('FormatStorage','yes'),/desconocido/);
+ await s.capture();assert.equal(calls.filter(c=>c.method==='actTakePicture').length,1);
+ const recipe={wbMode:14,kelvin:5600,ev:3};
+ let plan=await s.plan(recipe);assert.deepEqual(plan.wb,['Color Temperature',true,5600]);assert.equal(plan.ev,3);assert.equal(plan.manual.length,4);
+ assert.deepEqual(await s.apply(recipe),['Balance de blancos','Compensación de exposición']);assert.equal(ev,3);assert.equal(wb.colorTemperature,5600);
+ step=2;assert.equal((await s.plan(recipe)).ev,2);assert.equal((await s.plan({...recipe,ev:1})).ev,null);
+ assert.equal((await s.plan({...recipe,kelvin:5650})).wb,null);
+ failExposure=true;await assert.rejects(s.apply(recipe),/Confirmado: Balance de blancos/);failExposure=false;
+ methods=methods.filter(m=>m!=='setWhiteBalance');assert.equal((await s.plan(recipe)).wb,null);
+ global.setTimeout=(cb,ms,...args)=>originalTimeout(cb,ms===400?0:ms,...args);
+ failWrite=true;await assert.rejects(s.setControl('IsoSpeedRate','100'),/no confirmó/);failWrite=false;
+ const before=calls.length;s.close();await assert.rejects(s.capture(),/desconectada/);assert.equal(calls.length,before);
+ global.fetch=async()=>({ok:true,text:async()=>JSON.stringify({id:999,result:[]})});await assert.rejects(new SonySession(camera).connect(),/secuencia/);
+ global.fetch=async()=>({ok:false,status:503});await assert.rejects(request(camera.endpoint),/503/);
+ global.fetch=async()=>({ok:true,text:async()=>'{broken'});await assert.rejects(new SonySession(camera).connect(),/JSON/);
+ global.fetch=async(url,init)=>new Promise((resolve,reject)=>{const fail=()=>reject(new Error('Abort'));if(init.signal.aborted)fail();else init.signal.addEventListener('abort',fail);});
+ await assert.rejects(request(camera.endpoint,{},undefined,5),/plazo/);
+ const cancelled=new AbortController();cancelled.abort();await assert.rejects(request(camera.endpoint,{},cancelled.signal),/cancelada/);
+ let closed=0;
+ class Socket extends EventEmitter {bind(){queueMicrotask(()=>this.emit('listening'));}send(){this.emit('message',Buffer.from(`HTTP/1.1 200 OK\r\nLOCATION: ${descriptionURL}\r\n`),{address:'192.168.5.1'});}close(){closed++;}}
+ mocks['react-native']={NativeModules:{UdpSockets:{}}};mocks['react-native-udp']={createSocket:()=>new Socket()};
+ global.setTimeout=(cb,ms,...args)=>originalTimeout(cb,ms===6500?10:ms,...args);
+ global.fetch=async()=>({ok:true,text:async()=>xml});
+ const {discover}=load('src/camera/discovery.ts');
+ const found=await discover(new AbortController().signal);assert.equal(found.cameras.length,1);assert.equal(closed,1);
+ await assert.rejects(discover(cancelled.signal),/cancelada/);assert.equal(closed,2);
+ console.log('PASS: discovery, XML/model validation, dynamic endpoint, controls, read-back verification, partial recipe, EV mapping, unsupported values, interrupted writes, timeout, cancellation and cleanup.');
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>{global.fetch=originalFetch;global.setTimeout=originalTimeout;});

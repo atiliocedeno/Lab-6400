@@ -1,34 +1,39 @@
-# A6400: evidencia y prueba de conectividad
+# Integración de cámara, versión 1.1
 
-## Confirmado por documentación
+## Protocolo implementado
 
-- Sony enumera ILCE-6400 como compatible con Camera Remote Command (PTP). Los transportes y comandos específicos por modelo requieren la referencia suministrada por Sony; la lista global USB/LAN/Wi-Fi no demuestra que los tres funcionen en A6400.
-- El acceso publicado a Camera Remote Command está dirigido a clientes corporativos. No se obtuvo su paquete ni su matriz de comandos.
-- El manual ILCE-6400 documenta Ctrl w/ Smartphone y conexión Wi-Fi por SSID/QR.
+`discovery.ts` envía M-SEARCH SSDP a 239.255.255.250:1900 para ScalarWebAPI y ssdp:all. Escucha 6,5 segundos, deduplica hasta 16 anuncios y descarga exclusivamente las descripciones anunciadas. Cierra el socket al terminar o cancelar. No escanea subredes ni usa puertos HTTP predeterminados.
 
-Fuentes:
-https://support.d-imaging.sony.co.jp/app/cameraremotecommand/en/index.html
-https://helpguide.sony.net/ilc/1810/v1/en/contents/TP0002273504.html
+`protocol.ts` valida que LOCATION sea HTTP sobre IPv4 privada y que el remitente coincida. Procesa XML sin entidades/DOCTYPE, comprueba fabricante Sony y modelo ILCE-6400/ILCE-6400A. Obtiene ActionList_URL del servicio camera, exige el mismo host que el descriptor y agrega /camera. Tamaño máximo de texto aceptado: 256 KiB. Las redirecciones HTTP se rechazan.
 
-## Implementado como experimento
+`session.ts` usa JSON-RPC versión 1.0 con ID correlacionado, errores Sony explícitos y timeout de ocho segundos. Consulta capacidades e inicia startRecMode solo si aparece. Refresca capacidades antes de cada escritura, valida el valor contra el rango actual y verifica después con getters (hasta cinco lecturas). No reintenta setters ni disparos. Si una receta falla a mitad, informa qué cambios fueron confirmados; no promete rollback.
 
-La pestaña Cámara envía una sola solicitud JSON-RPC `getAvailableApiList`, versión 1.0, a un endpoint HTTP privado elegido por el usuario. Este método pertenece a la API Sony antigua; no equivale a PTP ni demuestra que la A6400 exponga esa interfaz. El proyecto libsonyapi documenta la consulta como forma de averiguar las funciones disponibles:
-https://github.com/petabite/libsonyapi
-Ejemplo del endpoint candidato:
-https://github.com/micolous/gst-plugins-sonyalpha
+La interfaz bloquea operaciones simultáneas y cierra la sesión al pasar a segundo plano. Un fallo invalida la sesión visible y requiere reconectar. Compartir diagnóstico es una acción explícita del usuario.
 
-No hay descubrimiento SSDP, identificación de modelo, emparejamiento automático ni escrituras. No se ejecutan setters aunque aparezcan en la respuesta. Lista vacía es una respuesta válida. El resultado incluye fecha, endpoint, métodos y `modelVerified: false` / `settingsWritten: false`. Compartir requiere acción del usuario.
+## Recetas parciales
 
-## Prueba física
+Solo se mapean white balance (Auto WB / Color Temperature) y exposure compensation cuando hay setter, getter y consulta de disponibles. Temperaturas se validan contra máximo/mínimo/paso. EV de la receta está expresado en tercios: para índice de paso Sony 1 se usa el mismo índice; para paso 2 (medios) se convierte exactamente. Valores no representables se dejan manuales, sin redondeo silencioso.
 
-1. Carga la app actualizada desde Expo Go con internet.
-2. Cámara: MENU → Red → Ctrl w/ Smartphone → On → Connection.
-3. iPhone: Ajustes → Wi-Fi → SSID mostrado por la cámara. Vuelve a la app sin recargarla. Permite Red local si iOS lo solicita.
-4. Cámara → Consultar funciones disponibles. La IP/puerto propuesta es una candidata, no una detección del dispositivo.
-5. Comparte el diagnóstico o el mensaje de fallo. No compartas contraseña Wi-Fi ni QR de emparejamiento.
+No existen implementaciones de Creative Style, contraste, saturación, nitidez, DRO ni ajuste fino. No se transmiten los enums internos de Recipe Lab. No se afirma aplicación completa.
 
-Expo Go puede verse limitado por sus permisos nativos, la política HTTP de iOS o la pérdida de internet al cambiar de Wi-Fi. Esas condiciones no se resuelven cambiando app.json dentro de Expo Go; pueden requerir development build. Un timeout no demuestra ausencia de API.
+## Nativo y firma
 
-## Siguiente decisión
+react-native-udp necesita compilación propia; no funciona en Expo Go. app.json declara descripción de red local y entitlement multicast de iOS. Apple debe autorizar el entitlement y el perfil de firma debe contenerlo; no basta con este repositorio. Android habilita red y HTTP local mediante un config plugin.
 
-Con respuesta positiva, verificar identidad, versiones y valores admitidos antes de implementar cada control y su lectura posterior. Con respuesta negativa, investigar transporte/endpoint y sesión; evaluar USB/PTP con la documentación específica. Bluetooth y aplicación automática de recetas no están implementados. No enviar IDs internos de A6000 a A6400.
+El perfil EAS preview incorpora JavaScript y evita depender de Metro cuando el teléfono usa el Wi-Fi de la cámara. No hay IPA/APK generado en esta entrega. La sesión Expo del Codespace del usuario no se comparte con este entorno.
+
+## Evidencia y límites
+
+La implementación sigue la API Sony legacy, **no** Camera Remote Command/PTP ni Camera Remote SDK. Que Sony enumere A6400 para otro toolkit no prueba que anuncie ScalarWebAPI. El comportamiento del hardware y los permisos multicast en dispositivo siguen sin verificarse. Ninguna prueba simulada valida todos los firmwares.
+
+Referencias:
+- Sony Camera Remote API development guide (descubrimiento): https://be-bright.github.io/assets/documents/Sony_CameraRemoteAPIbeta_DevelopmentGuide_v1.20.pdf
+- Sony API reference (JSON-RPC, controles y unidades): https://be-bright.github.io/assets/documents/Sony_CameraRemoteAPIbeta_API-Reference_v2.40.pdf
+- Guía A6400: https://helpguide.sony.net/ilc/1810/v1/en/contents/TP0002273504.html
+- Camera Remote Command: https://support.d-imaging.sony.co.jp/app/cameraremotecommand/en/index.html
+- UDP nativo: https://github.com/tradle/react-native-udp
+- Compilaciones Expo: https://docs.expo.dev/develop/development-builds/introduction/
+
+## Validación pendiente
+
+Compilar y firmar; verificar solicitud de permiso y descubrimiento con cámara física; comprobar lectura/escritura real por firmware; validar suspensión/reconexión y resultado visual. Si la cámara anuncia solo otro protocolo, será necesaria su implementación documentada. El timeout anterior por sí solo no determina qué protocolo admite.

@@ -2,14 +2,36 @@
   "expo": {
     "name": "Sony Recipe AI",
     "slug": "sony-recipe-ai",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.atiliocedeno.sonyrecipeai",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Buscar y controlar tu c\u00e1mara Sony en su red Wi-Fi.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true,
+          "NSAllowsArbitraryLoads": true
+        }
+      },
+      "entitlements": {
+        "com.apple.developer.networking.multicast": true
+      }
     },
     "android": {
-      "predictiveBackGestureEnabled": false
-    }
+      "predictiveBackGestureEnabled": false,
+      "package": "com.atiliocedeno.sonyrecipeai",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE"
+      ]
+    },
+    "plugins": [
+      "expo-dev-client",
+      "./plugins/with-camera-network"
+    ]
   }
 }

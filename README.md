@@ -1,66 +1,70 @@
-# Sony Recipe AI — primer prototipo móvil
+# Sony Recipe AI
 
-App React Native / Expo para iOS y Android, interfaz en español. Proyecto independiente.
+App React Native / Expo SDK 58 para iPhone y Android. Catálogo de 77 recetas, favoritos locales y control remoto condicionado a las capacidades que anuncie una Sony ILCE-6400/ILCE-6400A.
 
-## Abrir desde el mismo iPhone
+**Estado:** código y pruebas de protocolo implementados; todavía no hay una compilación nativa firmada ni validación física del control remoto. No se garantiza compatibilidad con todos los firmwares A6400. No se aplica automáticamente el look completo de Recipe Lab.
 
-Esta entrega usa Expo SDK 58, correspondiente al cliente Expo Go 58.0.5 del usuario. Instala la versión actual de Expo Go desde App Store.
+## Funciones
 
-1. Instala Expo Go desde App Store.
-2. Abre https://codespaces.new/atiliocedeno/Lab-6400 en Safari y crea un Codespace en `main`. Necesitas cuenta GitHub con Codespaces habilitado y cuota disponible.
-3. Espera a que termine la preparación y `npm ci` automático. Si Safari oculta controles, pide la versión de escritorio.
-4. En Terminal → New Terminal ejecuta desde la raíz del repositorio:
+- Catálogo original, búsqueda, filtros y favoritos persistentes.
+- Guía manual completa de cada receta.
+- Descubrimiento SSDP: obtiene la dirección real del servicio, valida fabricante y modelo. Sin IP ni puerto introducidos por el usuario.
+- Sesión ScalarWebAPI e inicio de modo remoto si la cámara lo anuncia.
+- ISO, apertura, velocidad y modo foto/vídeo solo con los valores ofrecidos por la cámara.
+- Captura de fotografía, sin reintentos automáticos que puedan duplicar disparos.
+- Aplicación **parcial** de receta: balance de blancos y compensación de exposición cuando estén disponibles; lectura posterior para verificar cada cambio.
+- Informe de ajustes pendientes y de errores parciales. Nunca envía IDs internos de A6000 a la A6400.
+
+## App instalada para conexión a cámara
+
+Expo Go no contiene el módulo UDP que necesita el descubrimiento. La pestaña Cámara explica esa limitación en lugar de ofrecer una prueba que no puede realizar.
 
 ```bash
+npm ci
+npm run build:iphone
+# o Android
+npm run build:android
+```
+
+`eas.json` incluye `preview`, una app con el bundle incorporado que funciona sin Metro ni internet una vez instalada. La cámara sigue necesitando su Wi-Fi y permiso de red local. El perfil `development` sirve para desarrollar con `npm run start:device` y sí usa Metro.
+
+Para compilar y distribuir en iPhone se necesitan sesión Expo/EAS, identidad de proyecto, cuenta Apple Developer y dispositivo registrado para distribución interna. El descubrimiento multicast requiere además el entitlement de Apple `com.apple.developer.networking.multicast` autorizado y presente en el perfil de firma. Declararlo en `app.json` **no concede** ese permiso. Este entorno no tiene dichas credenciales; no se ha generado un IPA.
+
+Android `preview` produce un APK. La configuración habilita el tráfico HTTP local que utiliza el protocolo Sony. No se envían datos a servidores externos desde el módulo de cámara.
+
+## Uso de conexión
+
+1. Instalar la compilación propia firmada.
+2. Activar en la cámara **Red → Ctrl con smartphone → Conexión**.
+3. Unir el teléfono al Wi-Fi de la cámara desde Ajustes y volver a la app.
+4. **Cámara → Buscar cámaras → Conectar**.
+5. Elegir un control o una receta y revisar qué ajustes se enviarán antes de aplicarlos.
+
+La app no configura el Wi-Fi automáticamente. Si la cámara no anuncia ScalarWebAPI, se informa del resultado; no se inventa otro endpoint ni se afirma que el modelo carezca de control remoto. PTP/IP, USB y Bluetooth no están implementados. La conexión se cierra al pasar la app a segundo plano o salir de la pestaña.
+
+## Catálogo con Expo Go
+
+```bash
+npm ci
 npm run start:iphone
 ```
 
-Si creaste un Codespace sin la configuración incluida, ejecuta `npm ci` primero.
+Abrir el enlace del túnel con Expo Go SDK 58. CLI y Expo Go pueden exigir iniciar sesión en Expo. Este modo sirve para el catálogo, no para descubrimiento nativo.
 
-5. Espera a que aparezca `Metro waiting on exp://...`. Copia la URL completa `exp://...` de la terminal, pégala en la barra de direcciones de Safari y acepta abrir Expo Go. No intentes escanear un QR en la pantalla del mismo teléfono.
-6. Conserva el Codespace activo mientras pruebas. Parar el servidor o suspender el Codespace desconecta la sesión. Codespaces tiene cuotas y puede tener costos fuera del uso incluido.
+## Validación
 
-Si el túnel falla, revisa el mensaje de ngrok, la conexión del Codespace y vuelve a iniciar `npm run start:iphone`. Si Expo Go muestra incompatibilidad de SDK, comprueba que estás usando la versión actual del repositorio y envía el mensaje exacto. No necesitas una cuenta Apple Developer ni crear un IPA para esta prueba con Expo Go.
+```bash
+npm test
+npm run typecheck
+npm run lint
+npx expo export --platform ios --platform android
+```
 
-## Ejecutar desde Mac
+Las pruebas de protocolo usan dispositivos simulados y cubren descubrimiento, XML, identificación, capacidades, rangos, confirmación de cambios, errores, timeout y cancelación. Exportar JavaScript **no** equivale a compilar o probar el módulo nativo en un teléfono.
 
-Usa Node.js 22 LTS, `npm ci` y `npm run start:iphone`. Abre el enlace o escanea el QR con el iPhone. El túnel usa internet, por lo que no exige estar en la misma red local.
+## Recetas y licencia
 
-El repositorio contiene código fuente. No se ha probado en un teléfono físico y no necesita claves API. El túnel se inicia en tu entorno, no viene activo dentro del ZIP.
-
-## Implementado
-
-- 77 entradas importadas: 76 looks y ajuste de fábrica; 12 grupos.
-- Búsqueda, filtro por grupo, favoritos persistentes en almacenamiento local.
-- Detalle con checklist manual, exposición convertida de tercios a EV, DRO y balance de blancos.
-- Seis recetas con Picture Effect diferenciadas de las basadas en Creative Style.
-- Estado honesto de conectividad: no se envían comandos a la cámara.
-
-## Limitaciones y siguiente etapa
-
-Los valores originales fueron desarrollados para A6000. Los nombres de estilos se muestran como referencia; los IDs internos nunca se transmiten a A6400. Escalas de WB, subparámetros, restricciones de vídeo y resultados visuales necesitan validación física. No se promete reproducción idéntica de películas o marcas. Las recetas con efecto requieren revisar restricciones JPEG/RAW y vídeo. Los pasos completados son confirmaciones del usuario, no lecturas de la cámara.
-
-Pendiente: probar controles en A6400; validar transporte y comandos documentados antes de implementar USB/Wi-Fi/Bluetooth; definir procesamiento móvil con fotos de prueba; implementar asistente IA. No se afirma que Bluetooth permita aplicar recetas. No hay procesamiento RAW ni simulación fotográfica en esta versión.
-
-## Fuente y licencia
-
-Dataset derivado de `Recipes.java` de voxivoid/recipe-lab-sony-pmca, commit `aab4b5703a2b77362b83682801c8e50145ddc6ee`.
+77 entradas derivadas de `Recipes.java`, voxivoid/recipe-lab-sony-pmca, commit `aab4b5703a2b77362b83682801c8e50145ddc6ee`. Fuente conservada en `vendor/Recipes.java`, licencia GPL-3.0 en `LICENSE`.
 https://github.com/voxivoid/recipe-lab-sony-pmca
-Se conserva fuente en vendor/Recipes.java y GPL-3.0 en LICENSE. Este prototipo derivado se distribuye bajo GPL-3.0. Las marcas pertenecen a sus titulares.
 
-Especificaciones Sony consultadas para nombres y rangos de Creative Style:
-https://www.sony.com.sg/electronics/support/e-mount-body-ilce-6000-series/ilce-6400/specifications
-Guía Sony (balance de blancos y restricciones de uso):
-https://helpguide.sony.net/ilc/1810/v1/en/index.html
-
-## Validación reproducible
-
-`python3 scripts/import-recipes.py` regenera JSON desde la fuente incluida.
-`npx tsc --noEmit` comprueba TypeScript.
-`npx expo export --platform ios --platform android` compila los bundles.
-
-## Prueba experimental de Wi-Fi
-
-La pestaña **Cámara** permite consultar funciones de la API antigua de Sony, con timeout de 10 segundos y diagnóstico compartible. Abre la app antes de conectar el iPhone al Wi-Fi de la cámara. No cambia ajustes y aún no se ha validado con hardware. La dirección propuesta es candidata, editable. Consulta `docs/CAMERA_CONNECTIVITY.md` para el procedimiento y las limitaciones.
-
-Pruebas del protocolo: `node tests/camera-probe.cjs`.
+Valores diseñados originalmente para A6000: equivalencia visual, escalas de ajuste fino y restricciones de la A6400 requieren validación física. El estilo, contraste, saturación, nitidez, ajuste fino y DRO permanecen manuales. No hay asistente IA ni procesamiento RAW implementado. Proyecto independiente de Sony.
