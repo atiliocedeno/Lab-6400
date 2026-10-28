@@ -54,14 +54,20 @@ global.fetch=async(url,init)=>{
  return {ok:true,text:async()=>JSON.stringify({id,result})};
 };
 (async()=>{
- const s=new SonySession(camera);await s.connect();assert.equal((await s.readControls()).length,1);
+ const s=new SonySession(camera);await s.connect();assert.equal((await s.readControls()).length,3);
  await s.setControl('IsoSpeedRate','200');assert.equal(iso,'200');
  await assert.rejects(s.setControl('IsoSpeedRate','999'),/disponible/);
  await assert.rejects(s.setControl('FormatStorage','yes'),/desconocido/);
  await s.capture();assert.equal(calls.filter(c=>c.method==='actTakePicture').length,1);
  const recipe={wbMode:14,kelvin:5600,ev:3};
+ const writesBefore=calls.filter(c=>c.method.startsWith('set')).length;
+ await assert.rejects(s.applyComplete(recipe),/No se envió ningún ajuste/);
+ assert.equal(calls.filter(c=>c.method.startsWith('set')).length,writesBefore);
  let plan=await s.plan(recipe);assert.deepEqual(plan.wb,['Color Temperature',true,5600]);assert.equal(plan.ev,3);assert.equal(plan.manual.length,4);
  assert.deepEqual(await s.apply(recipe),['Balance de blancos','Compensación de exposición']);assert.equal(ev,3);assert.equal(wb.colorTemperature,5600);
+ await s.setControl('ExposureCompensation','2');assert.equal(ev,2);
+ await s.setControl('WhiteBalance',JSON.stringify(['Color Temperature',true,5700]));assert.equal(wb.colorTemperature,5700);
+ await assert.rejects(s.setControl('WhiteBalance',JSON.stringify(['Color Temperature',true,5650])),/disponible/);
  step=2;assert.equal((await s.plan(recipe)).ev,2);assert.equal((await s.plan({...recipe,ev:1})).ev,null);
  assert.equal((await s.plan({...recipe,kelvin:5650})).wb,null);
  failExposure=true;await assert.rejects(s.apply(recipe),/Confirmado: Balance de blancos/);failExposure=false;

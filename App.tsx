@@ -1,14 +1,15 @@
+import {recipeFields} from './src/camera/recipeFields';
 import CameraPanel from './src/camera/CameraPanel';
 import React,{useEffect,useRef,useState} from 'react';
 import {StatusBar} from 'expo-status-bar';
 import {SafeAreaView,ScrollView,View,Text,TextInput,Pressable,StyleSheet,Alert} from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import {recipes,Recipe,guide} from './src/guide';
+import {recipes,Recipe} from './src/guide';
 const file=FileSystem.documentDirectory+'favorites.json';
 export default function App(){
  const saving=useRef(false);
  const [query,setQuery]=useState(''),[brand,setBrand]=useState('Todas'),[tab,setTab]=useState('Explorar');
- const [selected,setSelected]=useState<Recipe|null>(null),[favorites,setFavorites]=useState<string[]>([]),[ready,setReady]=useState(false),[done,setDone]=useState<number[]>([]);
+ const [selected,setSelected]=useState<Recipe|null>(null),[favorites,setFavorites]=useState<string[]>([]),[ready,setReady]=useState(false),[cameraRecipe,setCameraRecipe]=useState<Recipe|null>(null);
  useEffect(()=>{FileSystem.readAsStringAsync(file).then(s=>{const v=JSON.parse(s);if(Array.isArray(v))setFavorites(v.filter((id:unknown)=>typeof id==='string'&&recipes.some(r=>r.id===id)));}).catch(()=>{}).finally(()=>setReady(true));},[]);
  async function toggle(r:Recipe){if(saving.current)return;saving.current=true;const next=favorites.includes(r.id)?favorites.filter(id=>id!==r.id):[...favorites,r.id];try{await FileSystem.writeAsStringAsync(file,JSON.stringify(next));setFavorites(next);}catch{Alert.alert('No se pudo guardar','Intenta de nuevo.');}finally{saving.current=false;}}
  const filtered=recipes.filter(r=>(brand==='Todas'||r.brand===brand)&&r.name.toLowerCase().includes(query.toLowerCase())&&(tab!=='Favoritos'||favorites.includes(r.id)));
@@ -16,15 +17,16 @@ export default function App(){
  return <SafeAreaView style={s.root}><StatusBar style="light"/><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
  <Text style={s.eyebrow}>SONY RECIPE AI · PROTOTIPO</Text><Text style={s.title}>{selected?selected.name:'Tu próxima\nimagen empieza aquí.'}</Text>
  <View style={s.banner}><Text style={s.green}>α6400 · Recetas y control remoto</Text><Text style={s.muted}>Conecta desde Cámara · aplicación de recetas parcial</Text></View>
- {selected?<>{button('← Volver al catálogo',()=>setSelected(null))}<Text style={s.section}>{selected.brand} / {selected.pe?'Efecto JPEG':'Creative Style'}</Text><Text style={s.muted}>Marca cada paso cuando lo hayas realizado en tu cámara.</Text>
- {guide(selected).map((step,i)=><Pressable key={i} accessibilityRole="checkbox" accessibilityState={{checked:done.includes(i)}} onPress={()=>setDone(done.includes(i)?done.filter(n=>n!==i):[...done,i])} style={s.card}><Text style={s.green}>{done.includes(i)?'✓ Completado':`Paso ${i+1}`}</Text><Text style={s.body}>{step}</Text></Pressable>)}
- <Text style={s.muted}>{done.length} / {guide(selected).length} pasos marcados. No se enviaron ajustes a la cámara.</Text>{ready&&<Pressable accessibilityRole="button" style={s.button} onPress={()=>{void toggle(selected);}}><Text style={s.buttonText}>{favorites.includes(selected.id)?'★ Quitar favorito':'☆ Guardar favorito'}</Text></Pressable>}
+ {selected?<>{button('← Volver al catálogo',()=>setSelected(null))}<Text style={s.section}>{selected.brand} / {selected.pe?'Efecto JPEG':'Creative Style'}</Text><Text style={s.muted}>Valores del conjunto completo. Seleccionar esta receta no cambia todavía la cámara.</Text>
+ {recipeFields(selected).map(field=><View key={field.key} style={s.card}><Text style={s.green}>{field.label}</Text><Text style={s.body}>{field.value}</Text></View>)}
+ {button('Usar esta receta en Cámara',()=>{setCameraRecipe(selected);setSelected(null);setTab('Cámara');})}
+ <Text style={s.muted}>El envío completo requiere soporte para todos los parámetros. No se sustituye por aplicar únicamente el balance de blancos.</Text>{ready&&<Pressable accessibilityRole="button" style={s.button} onPress={()=>{void toggle(selected);}}><Text style={s.buttonText}>{favorites.includes(selected.id)?'★ Quitar favorito':'☆ Guardar favorito'}</Text></Pressable>}
  </>:<><View style={s.row}>{['Explorar','Favoritos','Cámara'].map(t=><React.Fragment key={t}>{button(t,()=>setTab(t),tab===t)}</React.Fragment>)}</View>
- {tab==='Cámara'?<CameraPanel/>:<>
+ {tab==='Cámara'?<CameraPanel initialRecipe={cameraRecipe}/>:<>
  <TextInput accessibilityLabel="Buscar receta" placeholder="Buscar Portra, Eterna, Cinestill…" placeholderTextColor="#8e989a" value={query} onChangeText={setQuery} style={s.input}/>
  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>{['Todas',...new Set(recipes.map(r=>r.brand))].map(b=><React.Fragment key={b}>{button(b,()=>setBrand(b),brand===b)}</React.Fragment>)}</ScrollView>
  <Text style={s.section}>{filtered.length} recetas · {tab==='Favoritos'?'Tu selección':'Catálogo original'}</Text>{filtered.length===0&&<Text style={s.body}>No hay recetas aquí. Cambia la búsqueda o guarda favoritas.</Text>}
- {filtered.map((r,i)=><Pressable key={r.id} accessibilityRole="button" accessibilityLabel={`Ver ${r.name}`} onPress={()=>{setSelected(r);setDone([]);}} style={s.card}><View style={s.cardTop}><Text style={s.eyebrow}>{r.brand.toUpperCase()}</Text><Text style={s.green}>{favorites.includes(r.id)?'★':String(i+1).padStart(2,'0')}</Text></View><Text style={s.recipe}>{r.name}</Text><Text style={s.muted}>{r.styleName} · {r.wbMode===14?r.kelvin+' K':'WB Auto'} · {r.pe?'Efecto JPEG':'Ajustes manuales'} ↗</Text></Pressable>)}</>}</>}
+ {filtered.map((r,i)=><Pressable key={r.id} accessibilityRole="button" accessibilityLabel={`Ver ${r.name}`} onPress={()=>{setSelected(r);}} style={s.card}><View style={s.cardTop}><Text style={s.eyebrow}>{r.brand.toUpperCase()}</Text><Text style={s.green}>{favorites.includes(r.id)?'★':String(i+1).padStart(2,'0')}</Text></View><Text style={s.recipe}>{r.name}</Text><Text style={s.muted}>{r.styleName} · {r.wbMode===14?r.kelvin+' K':'WB Auto'} · {r.pe?'Efecto JPEG':'Ver receta'} ↗</Text></Pressable>)}</>}</>}
  <Text style={s.footer}>Recetas de voxivoid / Recipe Lab · GPL-3.0{'\n'}Proyecto independiente, sin afiliación con Sony. Looks aproximados, no perfiles oficiales de otras marcas.</Text>
  </ScrollView></SafeAreaView>;
 }

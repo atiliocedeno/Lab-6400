@@ -1,16 +1,21 @@
+import ValuePicker from './ValuePicker';
+import {recipeFields,controlLabel} from './recipeFields';
 import {releaseCameraNetwork} from './androidNetwork';
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, View, Text, TextInput, Pressable, Share, StyleSheet } from 'react-native';
+import { AppState, View, Text, Pressable, Share, StyleSheet } from 'react-native';
 import { discover, discoveryAvailable } from './discovery';
 import { Camera } from './protocol';
-import { SonySession, Control, Plan, PartialApplicationError, VerificationError } from './session';
+import { SonySession, Control, Plan, AdjustmentResult, CameraRejectedError, PartialApplicationError, VerificationError } from './session';
 import { recipes, Recipe } from '../guide';
-export default function CameraPanel() {
+export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|null}) {
     const [busy, setBusy] = useState(false), [status, setStatus] = useState('Sin conexión'), [error, setError] = useState('');
     const [cameras, setCameras] = useState<Camera[]>([]), [camera, setCamera] = useState<Camera | null>(null);
     const [settings, setSettings] = useState<Control[]>([]), [methods, setMethods] = useState<string[]>([]);
-    const [diagnostics, setDiagnostics] = useState<string[]>([]), [query, setQuery] = useState('');
-    const [recipe, setRecipe] = useState<Recipe | null>(null), [plan, setPlan] = useState<Plan | null>(null);
+    const [diagnostics, setDiagnostics] = useState<string[]>([]);
+    const [picker,setPicker]=useState<Control|'recipes'|null>(null);
+    const [section,setSection]=useState<'controls'|'recipes'>('recipes');
+    const [results,setResults]=useState<AdjustmentResult[]>([]);
+    const [recipe, setRecipe] = useState<Recipe | null>(initialRecipe), [plan, setPlan] = useState<Plan | null>(null);
     const session = useRef<SonySession | null>(null), abort = useRef<AbortController | null>(null), alive = useRef(true), locked = useRef(false);
     const native = discoveryAvailable();
     useEffect(() => {
@@ -42,7 +47,7 @@ export default function CameraPanel() {
             if (alive.current) {
                 setError(e instanceof Error ? e.message : String(e));
                 setDiagnostics(previous=>[...previous,e instanceof Error?e.message:String(e)]);
-                if(e instanceof VerificationError || (e instanceof PartialApplicationError && e.connectionUsable)){
+                if(e instanceof CameraRejectedError || e instanceof VerificationError || (e instanceof PartialApplicationError && e.connectionUsable)){
                     setStatus('Conectada · ajuste sin confirmar; revisa la cámara');
                     setPlan(null);
                     return;
@@ -69,6 +74,7 @@ export default function CameraPanel() {
         setDiagnostics([]);
         const controller = new AbortController();
         abort.current = controller;
+        setResults([]);
         setStatus('Buscando cámaras en el Wi-Fi…');
         try {
             const found = await discover(controller.signal);
@@ -91,13 +97,14 @@ export default function CameraPanel() {
         try {
             await next.connect();
             const controls = await next.readControls();
+            const selectedPlan=recipe?await next.plan(recipe):null;
             if (!alive.current || session.current !== next)
                 return;
             setCamera(c);
+            setPlan(selectedPlan);
             setSettings(controls);
             setMethods([...next.methods]);
             setCameras([]);
-        setDiagnostics([]);
             setStatus('Cámara conectada');
         }
         catch (e) {
@@ -116,7 +123,8 @@ export default function CameraPanel() {
             return;
         setSettings(values);
         setMethods([...current.methods]);
-        setPlan(null);
+        setPlan(recipe?await current.plan(recipe):null);
+        setResults([]);
         setStatus('Controles actualizados');
     }
     return <View style={s.box}>
@@ -130,27 +138,48 @@ export default function CameraPanel() {
   {camera && <>
    <Text style={s.title}>{camera.model}</Text>
    {<Button label={'Actualizar controles'} onPress={() => { void run(refresh); }} busy={busy}/>}
-   {settings.map(control => <View key={control.key} style={s.group}><Text style={s.text}>{control.label}: {control.current}</Text><View style={s.wrap}>{control.values.map(value => <View key={value}>{<Button label={value} onPress={() => { void run(async () => { await session.current?.setControl(control.key, value); await refresh(); }); }} busy={busy} disabled={value === control.current}/>}</View>)}</View></View>)}
-   {<Button label={'Tomar fotografía'} onPress={() => { void run(async () => { await session.current?.capture(); if (alive.current && session.current)
-            setStatus('La cámara confirmó la captura.'); }); }} busy={busy} disabled={!methods.includes('actTakePicture')}/>}
-   <Text style={s.title}>Ajustes de una receta</Text>
-   <Text style={s.note}>La API puede permitir balance de blancos y exposición. El estilo, contraste, saturación, nitidez, ajuste fino y DRO permanecen manuales. No se anunciará una receta completa como aplicada.</Text>
-   <TextInput accessibilityLabel="Buscar receta para la cámara" style={s.input} value={query} onChangeText={setQuery} placeholder="Buscar receta…" placeholderTextColor="#a9b5b7"/>
-   {recipes.filter(r => r.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8).map(r => <View key={r.id}>{<Button label={r.name} onPress={() => { setRecipe(r); setPlan(null); void run(async () => { const current = session.current; if (!current)
-            return; const result = await current.plan(r); if (alive.current && current === session.current)
-            setPlan(result); }); }} busy={busy}/>}</View>)}
-   {recipe && plan && <View style={s.group}><Text style={s.text}>{recipe.name}</Text><Text style={s.note}>Se enviará: {[plan.wb ? 'balance de blancos' : null, plan.ev !== null ? 'exposición' : null].filter(Boolean).join(', ') || 'ningún ajuste disponible'}.</Text><Text style={s.note}>Completar en cámara: {plan.manual.join('; ')}.</Text>{<Button label={'Aplicar solo los ajustes disponibles'} onPress={() => { void run(async () => { const current = session.current; if (!current)
-            return; const confirmed = await current.apply(recipe); if (alive.current && current === session.current) {
-            setStatus(confirmed.length ? `Confirmado: ${confirmed.join(', ')}. Receta parcial.` : 'No se enviaron ajustes.');
-            setPlan(null);
-        } }); }} busy={busy} disabled={!plan.wb && plan.ev === null}/>}</View>}
+   <View style={s.wrap}>{(['recipes','controls'] as const).map(value=><Pressable key={value} accessibilityRole="tab" accessibilityState={{selected:section===value}} onPress={()=>setSection(value)} style={[s.tab,section===value&&s.tabActive]}><Text style={s.text}>{value==='recipes'?'Recetas':'Controles'}</Text></Pressable>)}</View>
+   {section==='controls'?<>
+    <Text style={s.note}>Solo se muestran valores disponibles ahora. P/A/S/M se cambia en «Modo de exposición» si la cámara lo permite; «Foto/vídeo» es otro control.</Text>
+    {settings.map(control=><Pressable key={control.key} accessibilityRole="button" accessibilityLabel={`Cambiar ${control.label}`} disabled={busy} onPress={()=>setPicker(control)} style={s.setting}><View style={{flex:1}}><Text style={s.note}>{control.label}</Text><Text style={s.text}>{control.labels?.[control.current]??controlLabel(control.key,control.current)}</Text></View><Text style={s.title}>›</Text></Pressable>)}
+    {!settings.length&&<Text style={s.note}>No hay controles disponibles en el estado actual. Cambia el modo en la cámara y actualiza.</Text>}
+    <Button label="Tomar fotografía" onPress={()=>{void run(async()=>{await session.current?.capture();if(alive.current&&session.current)setStatus('La cámara confirmó la captura.');});}} busy={busy} disabled={!methods.includes('actTakePicture')}/>
+   </>:<>
+    <Text style={s.title}>Receta completa, ajuste por ajuste</Text>
+    <Text style={s.note}>Una receta se envía como conjunto. Si falta soporte para alguno de sus parámetros, no se envía ninguno. Los controles individuales siguen disponibles en la otra pestaña.</Text>
+    <Button label={recipe?`Cambiar receta · ${recipe.name}`:'Elegir receta'} onPress={()=>setPicker('recipes')} busy={busy}/>
+    {recipe&&<View style={s.group}>
+     <Text style={s.title}>{recipe.name}</Text>
+     <Text style={s.note}>Los valores proceden de A6000: el resultado y las equivalencias en A6400 requieren validación. Usa Picture Profile desactivado; los efectos de imagen pueden exigir JPEG.</Text>
+     {recipeFields(recipe).map(field=>{
+      const result=results.find(r=>r.key===field.key);
+      const remote=field.key==='WhiteBalance'?!!plan?.wb:field.key==='ExposureCompensation'?plan?.ev!=null:false;
+      const label=result?({confirmed:'Lectura confirmada',unconfirmed:'Sin confirmar',rejected:'No aplicado',manual:'Sin soporte en esta integración','not-sent':'No enviado'}[result.state]):remote?'Envío individual implementado':'Envío todavía no implementado';
+      return <View key={field.key} style={s.field}><View style={s.settingTop}><Text style={s.text}>{field.label}</Text><Text style={s.text}>{field.value}</Text></View><Text style={result&&['rejected','unconfirmed'].includes(result.state)?s.error:s.note}>{label}</Text>{result&&<Text selectable style={s.note}>{result.detail}</Text>}</View>;
+     })}
+     <Button label="Enviar receta completa" busy={busy} disabled={!plan||plan.manual.length>0} onPress={()=>{void run(async()=>{
+      const current=session.current;if(!current)return;
+      setResults([]);
+      const report=await current.applyComplete(recipe);
+      if(alive.current&&current===session.current){setResults(report);setMethods([...current.methods]);setStatus(`${report.filter(r=>r.state==='confirmed').length}/2 ajustes remotos confirmados. Revisa el conjunto de la receta.`);setDiagnostics(previous=>[...previous,...report.map(r=>`${r.key}: ${r.state} · ${r.detail}`)]);}
+     });}}/>
+     <Text style={s.error}>Receta completa bloqueada: faltan controles de estilo/efecto, contraste, saturación, nitidez, ajuste fino WB y DRO en esta integración. Elegir una receta no cambia ningún ajuste.</Text>
+    </View>}
+   </>}
    {<Button label={'Desconectar'} onPress={() => { session.current?.close(); releaseCameraNetwork(); session.current = null; setCamera(null); setMethods([]); setSettings([]); setPlan(null); setStatus('Desconectada'); }} busy={busy}/>}
   </>}
+  {picker&&<ValuePicker title={picker==='recipes'?'Elegir receta':picker.label} current={picker==='recipes'?recipe?.id??'':picker.current} options={picker==='recipes'?recipes.map(r=>({value:r.id,label:r.name})):picker.values.map(value=>({value,label:picker.labels?.[value]??controlLabel(picker.key,value)}))} onClose={()=>setPicker(null)} onChoose={value=>{
+   const selection=picker;setPicker(null);
+   if(selection==='recipes'){
+    const selected=recipes.find(r=>r.id===value);if(!selected)return;setRecipe(selected);setPlan(null);setResults([]);
+    void run(async()=>{const current=session.current;if(!current)return;const next=await current.plan(selected);if(alive.current&&current===session.current)setPlan(next);});
+   }else void run(async()=>{const current=session.current;if(!current)return;await current.setControl(selection.key,value);setResults([]);await refresh();});
+  }}/>}
   {!!diagnostics.length && <Text selectable style={s.note}>{diagnostics.join('\n')}</Text>}
-  {<Button label={'Compartir diagnóstico'} onPress={() => { void Share.share({ message: JSON.stringify({ time: new Date().toISOString(), native, camera, methods, status, error, diagnostics }, null, 2) }).catch(() => setError('No se pudo compartir.')); }} busy={busy}/>}
+  {<Button label={'Compartir diagnóstico'} onPress={() => { void Share.share({ message: JSON.stringify({ time: new Date().toISOString(), native, camera, methods, status, error, diagnostics, recipe:recipe?.id, results, trace:session.current?.trace??[] }, null, 2) }).catch(() => setError('No se pudo compartir.')); }} busy={busy}/>}
  </View>;
 }
-const s = StyleSheet.create({ box: { gap: 16, padding: 20, borderRadius: 18, backgroundColor: '#1b272a' }, title: { color: '#c6eb9e', fontSize: 20, fontWeight: '600' }, text: { color: '#e4e8e3', fontSize: 15, lineHeight: 23 }, note: { color: '#a9b5b7', fontSize: 13, lineHeight: 20 }, input: { backgroundColor: '#101719', padding: 14, color: '#fff', borderRadius: 12 }, button: { padding: 13, backgroundColor: '#4a6543', borderRadius: 14 }, disabled: { opacity: 0.4 }, error: { color: '#ffbcaa', lineHeight: 22 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, group: { gap: 10, paddingVertical: 10 } });
+const s = StyleSheet.create({tab:{flex:1,padding:14,borderRadius:12,backgroundColor:'#101719',alignItems:'center'},tabActive:{backgroundColor:'#4a6543'},setting:{flexDirection:'row',alignItems:'center',gap:12,padding:16,borderRadius:12,backgroundColor:'#101719'},field:{padding:14,gap:8,borderRadius:12,backgroundColor:'#101719'},settingTop:{gap:6},check:{color:'#c6eb9e',paddingVertical:10,fontSize:14}, box: { gap: 16, padding: 20, borderRadius: 18, backgroundColor: '#1b272a' }, title: { color: '#c6eb9e', fontSize: 20, fontWeight: '600' }, text: { color: '#e4e8e3', fontSize: 15, lineHeight: 23 }, note: { color: '#a9b5b7', fontSize: 13, lineHeight: 20 }, input: { backgroundColor: '#101719', padding: 14, color: '#fff', borderRadius: 12 }, button: { padding: 13, backgroundColor: '#4a6543', borderRadius: 14 }, disabled: { opacity: 0.4 }, error: { color: '#ffbcaa', lineHeight: 22 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, group: { gap: 10, paddingVertical: 10 } });
 function Button({ label, onPress, disabled = false, busy = false }: {
     label: string;
     onPress: () => void;

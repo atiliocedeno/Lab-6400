@@ -85,3 +85,24 @@ cámara y acepta mantener la conexión sin internet antes de buscar.
 Validación pendiente en dispositivo: descubrir la A6400 con datos móviles activados
 y desactivados, leer su descripción, perder/reconectar Wi-Fi y cancelar la búsqueda.
 Las pruebas automáticas no confirman que la cámara exponga ScalarWebAPI.
+
+
+### 1.2.0: recetas completas y controles separados
+
+El objetivo es enviar todos los parámetros de una receta sin edición manual en
+la cámara. La integración ScalarWebAPI actual no implementa ese conjunto: solo
+WB y EV tienen mapeo desde las recetas. Por ello, el envío de recetas completas
+queda bloqueado antes de cualquier escritura. No se presenta una aplicación
+parcial como sustituto del resultado solicitado.
+
+Los controles individuales utilizan selectores con búsqueda y confirmación. Se
+incorporan WB, EV y modo de exposición cuando la cámara anuncia las APIs y valores
+correspondientes. Foto/vídeo permanece separado del modo de exposición P/A/S/M.
+El catálogo muestra todos los valores y permite llevar la receta a Cámara.
+Los diagnósticos incluyen las últimas 40 respuestas de lectura/escritura de la
+sesión para investigar disponibilidad por modo. Se comparten solo por acción del usuario.
+
+Pendiente: verificar acceso remoto a estilo/efecto, contraste, saturación, nitidez,
+ajuste fino WB y DRO en la A6400. Sony lista ILCE-6400 en Camera Remote Command,
+pero eso no demuestra soporte de todos esos parámetros ni PTP-IP para este modelo.
+No se ha implementado ni probado un transporte PTP/USB.
