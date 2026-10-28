@@ -67,7 +67,7 @@ global.fetch=async(url,init)=>{
  failExposure=true;await assert.rejects(s.apply(recipe),/Confirmado: Balance de blancos/);failExposure=false;
  methods=methods.filter(m=>m!=='setWhiteBalance');assert.equal((await s.plan(recipe)).wb,null);
  global.setTimeout=(cb,ms,...args)=>originalTimeout(cb,ms===400?0:ms,...args);
- failWrite=true;await assert.rejects(s.setControl('IsoSpeedRate','100'),/no confirmó/);failWrite=false;
+ failWrite=true;await assert.rejects(s.setControl('IsoSpeedRate','100'),e=>e.message.includes('getIsoSpeedRate')&&e.message.includes('esperado: \"100\"')&&e.message.includes('recibido: [\"200\"]'));failWrite=false;
  const before=calls.length;s.close();await assert.rejects(s.capture(),/desconectada/);assert.equal(calls.length,before);
  global.fetch=async()=>({ok:true,text:async()=>JSON.stringify({id:999,result:[]})});await assert.rejects(new SonySession(camera).connect(),/secuencia/);
  global.fetch=async()=>({ok:false,status:503});await assert.rejects(request(camera.endpoint),/503/);

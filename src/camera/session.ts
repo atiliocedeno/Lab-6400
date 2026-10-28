@@ -8,6 +8,10 @@ export const controls=[
 export type Control={key:string;label:string;current:string;values:string[]};
 export type Plan={wb:unknown[]|null;ev:number|null;manual:string[]};
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+export class VerificationError extends Error {}
+export class PartialApplicationError extends Error {
+ constructor(message:string,readonly connectionUsable:boolean){super(message);}
+}
 export class SonySession {
  methods:string[]=[];
  private id=0;
@@ -58,16 +62,17 @@ export class SonySession {
   if(this.writing)throw new Error('Hay una operación en curso.');
   this.writing=true;try{return await action();}finally{this.writing=false;}
  }
- private async verify(method:string,predicate:(value:unknown[])=>boolean){
-  for(let i=0;i<5;i++){const value=await this.call(method);if(predicate(value))return;await wait(400);}
-  throw new Error('La cámara aceptó la orden, pero no confirmó el valor. Comprueba el ajuste antes de continuar.');
+ private async verify(method:string,predicate:(value:unknown[])=>boolean,expected:unknown){
+  let value:unknown[]=[];
+  for(let i=0;i<5;i++){value=await this.call(method);if(predicate(value))return;if(i<4)await wait(400);}
+  throw new VerificationError(`La cámara aceptó la orden, pero no confirmó el valor. Lectura: ${method}; esperado: ${JSON.stringify(expected)}; recibido: ${JSON.stringify(value)}. Comprueba el ajuste antes de continuar.`);
  }
  async setControl(key:string,value:string){return this.exclusive(async()=>{
   if(!controls.some(c=>c.key===key))throw new Error('Control desconocido.');
   await this.refresh();this.require('getAvailable'+key,'get'+key,'set'+key);
   const r=await this.call('getAvailable'+key);
   if(!Array.isArray(r[1])||!r[1].includes(value))throw new Error('Este valor ya no está disponible. Actualiza los controles.');
-  await this.write('set'+key,[value]);await this.verify('get'+key,r=>r[0]===value);
+  await this.write('set'+key,[value]);await this.verify('get'+key,r=>r[0]===value,value);
  });}
  async capture(){return this.exclusive(async()=>{
   await this.refresh();this.require('actTakePicture');
@@ -107,9 +112,9 @@ export class SonySession {
   const plan=await this.plan(recipe),confirmed:string[]=[];
   try {
    if(plan.wb){const params=plan.wb;await this.write('setWhiteBalance',params);
-    await this.verify('getWhiteBalance',r=>{const wb=r[0] as {whiteBalanceMode?:unknown;colorTemperature?:unknown}|undefined;return wb?.whiteBalanceMode===params[0]&&(!params[1]||wb?.colorTemperature===params[2]);});confirmed.push('Balance de blancos');}
-   if(plan.ev!==null){await this.write('setExposureCompensation',[plan.ev]);await this.verify('getExposureCompensation',r=>r[0]===plan.ev);confirmed.push('Compensación de exposición');}
+    await this.verify('getWhiteBalance',r=>{const wb=r[0] as {whiteBalanceMode?:unknown;colorTemperature?:unknown}|undefined;return wb?.whiteBalanceMode===params[0]&&(!params[1]||wb?.colorTemperature===params[2]);},params);confirmed.push('Balance de blancos');}
+   if(plan.ev!==null){await this.write('setExposureCompensation',[plan.ev]);await this.verify('getExposureCompensation',r=>r[0]===plan.ev,plan.ev);confirmed.push('Compensación de exposición');}
    return confirmed;
-  }catch(e){throw new Error(`Aplicación interrumpida. Confirmado: ${confirmed.join(', ')||'ningún ajuste'}. ${e instanceof Error?e.message:String(e)} No se revirtió automáticamente.`);}
+  }catch(e){throw new PartialApplicationError(`Aplicación interrumpida. Confirmado: ${confirmed.join(', ')||'ningún ajuste'}. ${e instanceof Error?e.message:String(e)} No se revirtió automáticamente.`,e instanceof VerificationError);}
  });}
 }

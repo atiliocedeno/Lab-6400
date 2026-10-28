@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppState, View, Text, TextInput, Pressable, Share, StyleSheet } from 'react-native';
 import { discover, discoveryAvailable } from './discovery';
 import { Camera } from './protocol';
-import { SonySession, Control, Plan } from './session';
+import { SonySession, Control, Plan, PartialApplicationError, VerificationError } from './session';
 import { recipes, Recipe } from '../guide';
 export default function CameraPanel() {
     const [busy, setBusy] = useState(false), [status, setStatus] = useState('Sin conexión'), [error, setError] = useState('');
@@ -42,6 +42,11 @@ export default function CameraPanel() {
             if (alive.current) {
                 setError(e instanceof Error ? e.message : String(e));
                 setDiagnostics(previous=>[...previous,e instanceof Error?e.message:String(e)]);
+                if(e instanceof VerificationError || (e instanceof PartialApplicationError && e.connectionUsable)){
+                    setStatus('Conectada · ajuste sin confirmar; revisa la cámara');
+                    setPlan(null);
+                    return;
+                }
                 setStatus('Operación no completada · vuelve a conectar');
                 session.current?.close(); releaseCameraNetwork(); session.current = null;
                 setCamera(null); setMethods([]); setSettings([]); setPlan(null);
