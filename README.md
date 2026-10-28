@@ -68,3 +68,20 @@ Las pruebas de protocolo usan dispositivos simulados y cubren descubrimiento, XM
 https://github.com/voxivoid/recipe-lab-sony-pmca
 
 Valores diseñados originalmente para A6000: equivalencia visual, escalas de ajuste fino y restricciones de la A6400 requieren validación física. El estilo, contraste, saturación, nitidez, ajuste fino y DRO permanecen manuales. No hay asistente IA ni procesamiento RAW implementado. Proyecto independiente de Sony.
+
+
+### Android: conexión Wi-Fi sin internet (1.1.1)
+
+La búsqueda SSDP usa un socket ligado a la red Wi-Fi y a su interfaz IPv4,
+con un MulticastLock mientras escucha. Las consultas HTTP usan Network.openConnection
+sobre la misma red, sin cambiar la red predeterminada del teléfono.
+El módulo local `modules/camera-network` se incorpora automáticamente al compilar.
+Este cambio requiere una APK nueva; recargar JavaScript no actualiza el módulo nativo.
+
+Para compilar: `npm run build:android`. El perfil preview incluye el código JS
+y permite ejecutar la app sin Metro ni internet. Conecta Android al Wi-Fi de la
+cámara y acepta mantener la conexión sin internet antes de buscar.
+
+Validación pendiente en dispositivo: descubrir la A6400 con datos móviles activados
+y desactivados, leer su descripción, perder/reconectar Wi-Fi y cancelar la búsqueda.
+Las pruebas automáticas no confirman que la cámara exponga ScalarWebAPI.

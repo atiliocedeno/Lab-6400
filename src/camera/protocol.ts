@@ -1,3 +1,4 @@
+import {isAndroid,requestAndroid} from './androidNetwork';
 import {XMLParser, XMLValidator} from 'fast-xml-parser';
 
 export type Camera = {model:string; name:string; endpoint:string; descriptionURL:string};
@@ -43,6 +44,7 @@ export async function request(url:string, init:RequestInit={}, parent?:AbortSign
  if(parent?.aborted)c.abort();
  const timer=setTimeout(cancel,timeout);
  try {
+  if(isAndroid)return await requestAndroid(url,init,c.signal,timeout);
   const response=await fetch(url,{...init,signal:c.signal,redirect:'error'});
   if(!response.ok)throw new Error(`El servicio respondió HTTP ${response.status}.`);
   const text=await response.text();

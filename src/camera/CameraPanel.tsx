@@ -1,3 +1,4 @@
+import {releaseCameraNetwork} from './androidNetwork';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, View, Text, TextInput, Pressable, Share, StyleSheet } from 'react-native';
 import { discover, discoveryAvailable } from './discovery';
@@ -18,7 +19,7 @@ export default function CameraPanel() {
             if (state !== 'background')
                 return;
             abort.current?.abort();
-            session.current?.close();
+            session.current?.close(); releaseCameraNetwork();
             session.current = null;
             setCamera(null);
             setSettings([]);
@@ -26,7 +27,7 @@ export default function CameraPanel() {
             setPlan(null);
             setStatus('Conexión cerrada al salir de la app.');
         });
-        return () => { alive.current = false; listener.remove(); abort.current?.abort(); session.current?.close(); };
+        return () => { alive.current = false; listener.remove(); abort.current?.abort(); session.current?.close(); releaseCameraNetwork(); };
     }, []);
     async function run(action: () => Promise<void>) {
         if (locked.current)
@@ -40,8 +41,9 @@ export default function CameraPanel() {
         catch (e) {
             if (alive.current) {
                 setError(e instanceof Error ? e.message : String(e));
+                setDiagnostics(previous=>[...previous,e instanceof Error?e.message:String(e)]);
                 setStatus('Operación no completada · vuelve a conectar');
-                session.current?.close(); session.current = null;
+                session.current?.close(); releaseCameraNetwork(); session.current = null;
                 setCamera(null); setMethods([]); setSettings([]); setPlan(null);
             }
         }
@@ -52,13 +54,14 @@ export default function CameraPanel() {
         }
     }
     async function search() {
-        session.current?.close();
+        session.current?.close(); releaseCameraNetwork();
         session.current = null;
         setCamera(null);
         setMethods([]);
         setSettings([]);
         setPlan(null);
         setCameras([]);
+        setDiagnostics([]);
         const controller = new AbortController();
         abort.current = controller;
         setStatus('Buscando cámaras en el Wi-Fi…');
@@ -68,7 +71,7 @@ export default function CameraPanel() {
                 return;
             setCameras(found.cameras);
             setDiagnostics(found.diagnostics);
-            setStatus(found.cameras.length ? 'Selecciona tu cámara' : 'No se encontró un servicio compatible.');
+            setStatus(found.cameras.length ? 'Selecciona tu cámara' : 'No se pudo identificar la cámara. Revisa el diagnóstico.');
         }
         finally {
             if (abort.current === controller)
@@ -89,6 +92,7 @@ export default function CameraPanel() {
             setSettings(controls);
             setMethods([...next.methods]);
             setCameras([]);
+        setDiagnostics([]);
             setStatus('Cámara conectada');
         }
         catch (e) {
@@ -115,7 +119,7 @@ export default function CameraPanel() {
   <Text accessibilityLiveRegion="polite" style={s.text}>{status}</Text>
   {!native ? <Text style={s.error}>Estás usando una app sin el módulo de detección. Instala la compilación propia de Sony Recipe AI; Expo Go permite usar el catálogo, pero no esta conexión.</Text> : <Text style={s.note}>En la cámara activa Ctrl con smartphone. Conecta el teléfono a su Wi-Fi y vuelve aquí. La app descubre el modelo y la dirección del servicio automáticamente.</Text>}
   {!camera && <Button label={'Buscar cámaras'} onPress={() => { void run(search); }} busy={busy} disabled={!native}/>}
-  {busy && <Pressable accessibilityRole="button" onPress={() => { abort.current?.abort(); session.current?.close(); session.current = null; setCamera(null); setPlan(null); setSettings([]); setMethods([]); }}><Text style={s.text}>Cancelar</Text></Pressable>}
+  {busy && <Pressable accessibilityRole="button" onPress={() => { abort.current?.abort(); session.current?.close(); releaseCameraNetwork(); session.current = null; setCamera(null); setPlan(null); setSettings([]); setMethods([]); }}><Text style={s.text}>Cancelar</Text></Pressable>}
   {cameras.map(c => <View key={c.endpoint}>{<Button label={`Conectar · ${c.name}`} onPress={() => { void run(() => connect(c)); }} busy={busy}/>}</View>)}
   {!!error && <Text selectable style={s.error}>{error}</Text>}
   {camera && <>
@@ -135,7 +139,7 @@ export default function CameraPanel() {
             setStatus(confirmed.length ? `Confirmado: ${confirmed.join(', ')}. Receta parcial.` : 'No se enviaron ajustes.');
             setPlan(null);
         } }); }} busy={busy} disabled={!plan.wb && plan.ev === null}/>}</View>}
-   {<Button label={'Desconectar'} onPress={() => { session.current?.close(); session.current = null; setCamera(null); setMethods([]); setSettings([]); setPlan(null); setStatus('Desconectada'); }} busy={busy}/>}
+   {<Button label={'Desconectar'} onPress={() => { session.current?.close(); releaseCameraNetwork(); session.current = null; setCamera(null); setMethods([]); setSettings([]); setPlan(null); setStatus('Desconectada'); }} busy={busy}/>}
   </>}
   {!!diagnostics.length && <Text selectable style={s.note}>{diagnostics.join('\n')}</Text>}
   {<Button label={'Compartir diagnóstico'} onPress={() => { void Share.share({ message: JSON.stringify({ time: new Date().toISOString(), native, camera, methods, status, error, diagnostics }, null, 2) }).catch(() => setError('No se pudo compartir.')); }} busy={busy}/>}

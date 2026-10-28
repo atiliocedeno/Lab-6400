@@ -3,7 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const ts=require('typescript');
 const {EventEmitter}=require('node:events');
-const cache=new Map(),mocks={};
+const cache=new Map(),mocks={'./androidNetwork':{isAndroid:false}};
 function load(file){
  file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;
  const mod={exports:{}};cache.set(file,mod);

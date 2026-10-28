@@ -2,14 +2,14 @@
   "expo": {
     "name": "Sony Recipe AI",
     "slug": "sony-recipe-ai",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.atiliocedeno.sonyrecipeai",
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Buscar y controlar tu c\u00e1mara Sony en su red Wi-Fi.",
+        "NSLocalNetworkUsageDescription": "Buscar y controlar tu cámara Sony en su red Wi-Fi.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
           "NSAllowsArbitraryLoads": true
