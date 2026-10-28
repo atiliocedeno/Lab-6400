@@ -25,13 +25,14 @@ export function parseDescription(xml:string, descriptionURL:string):Camera {
  const device=parsed?.root?.device;
  if(!device||typeof device.modelName!=='string'||!/^Sony(?: Corporation)?$/i.test(device.manufacturer?.trim()??''))
   throw new Error('El dispositivo no se identifica como cámara Sony.');
- if(!/^ILCE-6400A?$/i.test(device.modelName.trim()))
+ // Some Sony firmware advertises a generic model; capabilities still require validation.
+ if(!/^(ILCE-6400A?|SonyImagingDevice)$/i.test(device.modelName.trim()))
   throw new Error(`Modelo ${device.modelName}: esta versión está destinada a la A6400.`);
  const services=device.X_ScalarWebAPI_DeviceInfo?.X_ScalarWebAPI_ServiceList?.X_ScalarWebAPI_Service;
  const list=Array.isArray(services)?services:services?[services]:[];
  const camera=list.find(s=>s.X_ScalarWebAPI_ServiceType==='camera');
  if(!camera||typeof camera.X_ScalarWebAPI_ActionList_URL!=='string')
-  throw new Error('A6400 detectada, pero no anuncia un servicio ScalarWebAPI de control.');
+  throw new Error('Dispositivo Sony detectado, pero no anuncia un servicio ScalarWebAPI de control.');
  const base=localURL(camera.X_ScalarWebAPI_ActionList_URL,source.hostname);
  base.pathname=base.pathname.replace(/\/$/,'')+'/camera';
  return {model:device.modelName.trim(),name:typeof device.friendlyName==='string'?device.friendlyName:device.modelName,endpoint:base.href,descriptionURL:source.href};

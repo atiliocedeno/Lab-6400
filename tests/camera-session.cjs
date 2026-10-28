@@ -17,6 +17,11 @@ const xml=`<root><device><manufacturer>Sony Corporation</manufacturer><modelName
 const descriptionURL='http://192.168.5.1:60000/device.xml';
 const camera=parseDescription(xml,descriptionURL);
 assert.equal(camera.endpoint,'http://192.168.5.1:10000/custom/camera');
+const generic=parseDescription(xml.replace('ILCE-6400','SonyImagingDevice'),descriptionURL);
+assert.equal(generic.model,'SonyImagingDevice');
+assert.equal(generic.endpoint,camera.endpoint);
+assert.throws(()=>parseDescription(xml.replace('ILCE-6400','SonyImagingDevice').replace('>camera<','>avContent<'),descriptionURL),/no anuncia/);
+assert.throws(()=>parseDescription(xml.replace('ILCE-6400','SonyImagingDevice').replace('Sony Corporation','Other'),descriptionURL),/Sony/);
 for(const bad of ['http://8.8.8.8/x','https://192.168.5.1/x','http://user:pass@192.168.5.1/x'])assert.throws(()=>localURL(bad));
 assert.throws(()=>parseDescription(xml.replace('ILCE-6400','ILCE-7M3'),descriptionURL),/Modelo/);
 assert.throws(()=>parseDescription(xml.replace('192.168.5.1:10000','192.168.5.2:10000'),descriptionURL),/local/);
