@@ -76,3 +76,47 @@ the development environment; gphoto2 behavior on the user's Mac remains untested
 Do not add PTP setting writes to the app until the inventory identifies the
 required controls, their types/ranges, and actual writes can be read back and
 verified on the A6400. USB success would not establish PTP-over-Wi-Fi support.
+
+## Results from the actual USB inventory (firmware 2.0)
+
+The supplied Atilio inventory completed over USB with gphoto2 2.5.32. It contains
+101 configuration entries; these are not 101 distinct camera properties because
+named controls and raw `/main/other` entries overlap. Its property summary has
+63 entries: 47 marked rw, 15 ro, and one failed descriptor (D220, PTP error 2002).
+The audit collector now explicitly preserves descriptor warnings despite exit 0.
+A completed command sequence is not proof of a fully readable device.
+
+| Recipe component | Observed USB evidence | Conclusion |
+| --- | --- | --- |
+| WB mode | 5005 rw; named whitebalance writable | Write candidate, not tested |
+| WB temperature | D20F ro; 2500–9900 step 100, current 0 | Not writable in this snapshot (WB Automatic); no mode transition tested |
+| WB G/M | D210 rw; 164–220 step 1, current 192 | Mapping to recipe units/direction unverified |
+| WB A/B | D21C rw; 164–220 step 2, current 192 | Mapping to recipe units/direction unverified |
+| DRO/HDR | D201 rw; named DRO choices | Write candidate, not tested |
+| Picture Effect | D21B rw; numeric enumeration | Distinct from Creative Style; mapping must be verified |
+| Creative Style | D240 absent from config and property summary | No advertised direct property in this session |
+| Contrast/saturation/sharpness | No named entries or identified properties | No verified write path |
+| EV | 5010 ro but D200 rw | Different properties; do not treat as equivalent without validation |
+
+Unknown properties were D212 (rw, 0–15), D22E (ro), D232 (ro), D233 (ro),
+D236 (rw, 0/1), and the failed D220. The observed range alone cannot identify a
+property as Creative Style or justify writing it. No blind writes were added.
+Remote directional keys do not prove the full camera menu can be automated; no
+menu-open/confirm workflow or resulting recipe-state readback has been verified.
+
+Review of libgphoto2's generic `other` section shows it iterates the reported
+DeviceProps and attempts to read descriptors even when they have no friendly
+label. Therefore D240's absence is stronger evidence than a missing named UI
+control. It still does not exclude a different negotiated session/protocol, an
+unadvertised operation, or a firmware-specific extension.
+Source: https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/config.c
+
+### Current engineering decision
+
+Full-recipe delivery remains blocked. Do not ship a PTP APK, translate Creative
+Look IDs to Creative Style, rename unknown properties, or label a partial WB/DRO
+write as a completed recipe. The missing dependency is a verified A6400 command
+or reproducible control sequence for Creative Style and its three parameters.
+Further progress requires model-specific protocol evidence or controlled physical
+reverse engineering; another repetition of this inventory is not required.
+No serial numbers or full user diagnostic were committed.

@@ -8,11 +8,11 @@ m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 CONFIG = '/main/other/d240\nLabel: Creative Style\nReadonly: 0\nType: RADIO\nCurrent: Standard\nChoice: 0 Standard\nChoice: 1 Vivid\nEND\n/main/status/battery\nLabel: Battery\nReadonly: 1\nCurrent: 100\n'
 class AuditTests(unittest.TestCase):
-    def run_audit(self, detection='Sony ILCE-6400 (PC Control) usb:001,002', fail=None, config=CONFIG):
+    def run_audit(self, detection='Sony ILCE-6400 (PC Control) usb:001,002', fail=None, config=CONFIG, summary='Sony ILCE-6400'):
         calls=[]
         def run(args):
             calls.append(args)
-            output={'--version':'gphoto2 test', '--auto-detect':detection, '--summary':'Sony ILCE-6400', '--list-all-config':config}[args[-1]]
+            output={'--version':'gphoto2 test', '--auto-detect':detection, '--summary':summary, '--list-all-config':config}[args[-1]]
             return {'args':args,'exitCode':1 if args[-1]==fail else 0,'stdout':output,'stderr':'failed' if args[-1]==fail else ''}
         return m.audit(run),calls
     def test_success_only_read_commands(self):
@@ -35,6 +35,11 @@ class AuditTests(unittest.TestCase):
             r,_=self.run_audit(config=raw);self.assertFalse(r['complete']);self.assertEqual(r['commands'][-1]['stdout'],raw)
     def test_no_inferred_write_permission(self):
         self.assertNotIn('readonly',m.parse_config('/main/other/d240\nLabel: Unknown')[0])
+    def test_descriptor_failure_is_preserved_despite_successful_process(self):
+        r,_=self.run_audit(summary='[Unknown Property] (d220 -- ---): PTP error 2002 on query')
+        self.assertTrue(r['complete']);self.assertTrue(r['descriptorReadErrors'])
+        self.assertIn('d220',r['warnings'][0])
+        self.assertFalse(self.run_audit()[0]['descriptorReadErrors'])
     def test_missing_executable(self):
         with patch.object(m.subprocess,'run',side_effect=FileNotFoundError()):
             self.assertIsNone(m.execute(['--version'])['exitCode'])

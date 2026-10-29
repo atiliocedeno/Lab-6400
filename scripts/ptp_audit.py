@@ -42,7 +42,7 @@ def parse_config(text):
 def audit(run=execute):
     report = {'schemaVersion': 1, 'transport': 'USB/PTP via gphoto2',
               'time': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              'complete': False, 'commands': [], 'controls': [],
+              'complete': False, 'commands': [], 'controls': [], 'warnings': [],
               'scope': 'Lectura de configuración expuesta por gphoto2. Readonly=0 no verifica escrituras. Ausencia no demuestra imposibilidad con otro controlador.'}
     def call(args):
         result = run(args)
@@ -59,7 +59,11 @@ def audit(run=execute):
         model, port = cameras[0]
         report['model'] = model
         prefix = ['--camera', model, '--port', port]
-        call([*prefix, '--summary'])
+        summary = call([*prefix, '--summary'])
+        report['warnings'] = [line.strip() for line in summary.splitlines()
+                              if 'PTP error' in line]
+        # gphoto2 can exit successfully even if an individual descriptor failed.
+        report['descriptorReadErrors'] = bool(report['warnings'])
         raw = call([*prefix, '--list-all-config'])
         report['controls'] = parse_config(raw)
         if not report['controls']:
@@ -80,6 +84,8 @@ def main():
         json.dump(report, f, ensure_ascii=False, indent=2)
     print('Informe guardado: '+str(filename.resolve()))
     print('Inventario terminado; no se enviaron ajustes.' if report['complete'] else report['error'])
+    for warning in report['warnings']:
+        print('Advertencia de lectura: '+warning)
     return 0 if report['complete'] else 1
 
 
