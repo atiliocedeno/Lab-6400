@@ -2,7 +2,7 @@
 // This audit never executes names supplied by the camera: only this read-only allowlist.
 export type CapabilityReport={
  schemaVersion:1;startedAt:string;finishedAt?:string;endpoint:string;model:string;
- complete:boolean;availableMethods:string[];
+ complete:boolean;error?:string;availableMethods:string[];
  reads:{method:string;params:unknown[];result?:unknown[];error?:string}[];
  scope:string;
 };
@@ -28,9 +28,14 @@ export async function collectCapabilities(
   report.availableMethods=[...new Set(available[0] as string[])];
   // Documented introspection methods may be omitted from the currently available list.
   await read('getApplicationInfo');
-  await read('getMethodTypes',['']);
+  const types=await read('getMethodTypes',['']);
+  if(types&&!types.every(row=>Array.isArray(row)&&row.length===4&&typeof row[0]==='string'&&
+   Array.isArray(row[1])&&row[1].every(v=>typeof v==='string')&&
+   Array.isArray(row[2])&&row[2].every(v=>typeof v==='string')&&typeof row[3]==='string'))
+   throw new Error('Tipos de métodos inválidos; se conserva la respuesta original.');
   for(const method of auditReadMethods)if(report.availableMethods.includes(method))await read(method);
   report.complete=true;
- } finally {report.finishedAt=new Date().toISOString();}
+ } catch(error){report.error=error instanceof Error?error.message:String(error);throw error;}
+ finally {report.finishedAt=new Date().toISOString();}
  return report;
 }

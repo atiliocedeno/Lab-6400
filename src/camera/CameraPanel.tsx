@@ -99,8 +99,12 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
         setStatus('Iniciando control remoto…');
         try {
             await next.connect();
-            const controls = await next.readControls();
-            const selectedPlan=recipe?await next.plan(recipe):null;
+            let controls:Control[]=[],selectedPlan:Plan|null=null;
+            try {controls=await next.readControls();selectedPlan=recipe?await next.plan(recipe):null;}
+            catch(e){
+                if(!(e instanceof CameraRejectedError))throw e;
+                setDiagnostics(previous=>[...previous,'Un control fue rechazado; puedes comprobar capacidades: '+e.message]);
+            }
             if (!alive.current || session.current !== next)
                 return;
             setCamera(c);
@@ -145,7 +149,7 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
   <Text accessibilityLiveRegion="polite" style={s.text}>{status}</Text>
   {!native ? <Text style={s.error}>Estás usando una app sin el módulo de detección. Instala la compilación propia de Sony Recipe AI; Expo Go permite usar el catálogo, pero no esta conexión.</Text> : <Text style={s.note}>En la cámara activa Ctrl con smartphone. Conecta el teléfono a su Wi-Fi y vuelve aquí. La app descubre el modelo y la dirección del servicio automáticamente.</Text>}
   {!camera && <Button label={'Buscar cámaras'} onPress={() => { void run(search); }} busy={busy} disabled={!native}/>}
-  {busy && <Pressable accessibilityRole="button" onPress={() => { abort.current?.abort(); session.current?.close(); releaseCameraNetwork(); session.current = null; setCamera(null); setPlan(null); setSettings([]); setMethods([]); }}><Text style={s.text}>Cancelar</Text></Pressable>}
+  {busy && <Pressable accessibilityRole="button" onPress={() => { abort.current?.abort(); session.current?.close(); releaseCameraNetwork(); session.current = null; setCamera(null); setPlan(null); setSettings([]); setMethods([]); setStatus('Operación cancelada'); }}><Text style={s.text}>Cancelar</Text></Pressable>}
   {cameras.map(c => <View key={c.endpoint}>{<Button label={`Conectar · ${c.name}`} onPress={() => { void run(() => connect(c)); }} busy={busy}/>}</View>)}
   {!!error && <Text selectable style={s.error}>{error}</Text>}
   {camera && <>

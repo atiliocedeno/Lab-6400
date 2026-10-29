@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sony Recipe AI",
     "slug": "sony-recipe-ai",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "ios": {

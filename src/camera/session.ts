@@ -30,6 +30,7 @@ export class SonySession {
   const text=await request(this.camera.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method,params,id,version:'1.0'})},this.lifetime.signal);
   let data;
   try{data=JSON.parse(text);}catch{throw new Error('La cámara devolvió una respuesta que no es JSON.');}
+  if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Respuesta Sony inválida.');
   // Introspection uses plural `results` in Sony's documented wire format.
   const result=method==='getMethodTypes'?data.results:data.result;
   if(/^(get|set)/.test(method)){

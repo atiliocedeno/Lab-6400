@@ -29,9 +29,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "start:device": "expo start --dev-client --tunnel",
-    "test": "node tests/camera-probe.cjs && node tests/camera-session.cjs && node tests/android-network.cjs",
+    "test": "node tests/camera-probe.cjs && node tests/camera-session.cjs && node tests/android-network.cjs && node tests/capabilities.cjs && node tests/camera-panel.cjs",
     "build:iphone": "npx eas-cli@latest build --platform ios --profile preview",
-    "build:android": "npx eas-cli@latest build --platform android --profile preview"
+    "build:android": "npm run validate && npx eas-cli@latest build --platform android --profile preview",
+    "validate": "npm test && npm run typecheck && npm run lint"
   },
   "private": true,
   "license": "GPL-3.0-only"
