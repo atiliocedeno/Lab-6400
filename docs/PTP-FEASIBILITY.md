@@ -1,4 +1,4 @@
-# A6400: feasibility after the real Wi-Fi audit
+# A6400: full-recipe feasibility after Wi-Fi and USB audits
 
 ## Evidence from the supplied device report
 
@@ -30,10 +30,10 @@ silently treated as the authoritative confirmation of an earlier write.
   for Creative Style without verified mapping.
 
 No verified A6400 write path for the entire recipe was established by this review.
-The next evidence required is its USB configuration inventory. No mobile changes
-or APK build are needed to collect that inventory.
+The USB inventory has now also been collected and reviewed below. Do not repeat
+it or request a new APK as a remedy for the missing commands.
 
-## Run on the Mac, not Codespaces
+## Collector reference (already run; not a new user action)
 
 Install prerequisites once (internet required only for installation):
 
@@ -67,11 +67,12 @@ the camera serial number; the file is local and nothing is uploaded automaticall
 
 ## Validation
 
-`python3 tests/ptp-audit.py`: eight tests passed, covering command allowlist,
+`python3 tests/ptp-audit.py`: nine tests passed, covering command allowlist,
 explicit model/port targeting, absent/ambiguous/other-model cameras, 6400A,
 failed commands with partial output, malformed config, missing readonly flag,
 missing executable and timeout output. No physical USB camera was available in
-the development environment; gphoto2 behavior on the user's Mac remains untested.
+the development environment. The supplied Mac inventory demonstrates collection,
+not successful setting writes.
 
 Do not add PTP setting writes to the app until the inventory identifies the
 required controls, their types/ranges, and actual writes can be read back and
@@ -120,3 +121,45 @@ or reproducible control sequence for Creative Style and its three parameters.
 Further progress requires model-specific protocol evidence or controlled physical
 reverse engineering; another repetition of this inventory is not required.
 No serial numbers or full user diagnostic were committed.
+
+
+## Follow-up investigation: alternatives checked
+
+Reviewed 2026-10-29. These findings do not establish a working complete recipe.
+
+- **Protocol negotiation:** current libgphoto2 `ptp_sony_get_vendorpropcodes`
+  requests Sony protocol 3.00 and selects mode 2 or 3 from the camera response.
+  A different client cannot be assumed to unlock properties merely by requesting
+  v3. This source review is of master, not a verified match to the installed
+  libgphoto2 2.5.34 binary; the supplied inventory does not record the negotiated
+  version. No claim is made that the user's camera was tested in every mode.
+  https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/ptp.c
+- **Third-party recipe examples:** pysonycam's example distinguishes full
+  Creative Look recipes from older Creative Style selection. Its closest-style
+  fallback maps multiple looks to the same style, and is not equivalent to
+  sending the recipe's contrast, saturation and sharpness. It supplies no
+  physical A6400 validation for this requirement.
+  https://github.com/olkham/pysonycam/blob/main/examples/creative_look_recipes.py
+- **Sony Camera Remote SDK:** the official supported-device list does not include
+  ILCE-6400. It cannot be offered as an established drop-in solution here.
+  https://support.d-imaging.sony.co.jp/app/sdk/en/
+- **Sony Camera Remote Command:** this separate lower-level product does list
+  ILCE-6400. Supported commands and transports are model-specific. The public
+  remote-emulation announcement is not an A6400 menu-control guarantee. Sony
+  explicitly corrected compatibility marks for commands that do not work on
+  some models. The detailed command reference is available by application to
+  corporate customers, not individual download; it was not obtained in this
+  investigation. Model-level listing alone does not prove full recipe support.
+  https://support.d-imaging.sony.co.jp/app/cameraremotecommand/en/index.html
+- **Unknown properties and metadata:** numeric ranges and EXIF tag names do not
+  identify writable remote settings. No speculative mapping or writes to D212,
+  D236, or the failed D220 descriptor were introduced.
+
+### Release gate
+
+The missing evidence is a model-specific command or sequence for Creative Style,
+contrast, saturation and sharpness, followed by physical write/readback of every
+required recipe component. Neither a mock passing nor a successful APK build
+can supply that evidence. No new APK or firmware modification is justified by
+these findings. Full recipe application remains unfinished; this is a bounded
+finding about the interfaces investigated, not proof of hardware impossibility.
