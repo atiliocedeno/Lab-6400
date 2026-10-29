@@ -22,7 +22,8 @@ class SonySession {
 const camera={model:'SonyImagingDevice',name:'Sony',endpoint:'http://192.168.122.1/camera'};
 const mocks={
  react:React,
- 'react-native':{View:'View',Text:'Text',Pressable:'Pressable',StyleSheet:{create:x=>x},Share:{share:async data=>{shared=JSON.parse(data.message);}},AppState:{addEventListener:(name,fn)=>{background=fn;return {remove(){}};}}},
+ 'react-native':{Platform:{OS:'android'},View:'View',Text:'Text',Pressable:'Pressable',StyleSheet:{create:x=>x},Share:{share:async data=>{shared=JSON.parse(data.message);}},AppState:{addEventListener:(name,fn)=>{background=fn;return {remove(){}};}}},
+ './exportDiagnostic':{exportDiagnostic:async()=>true},
  './ValuePicker':()=>null,'./recipeFields':{recipeFields:()=>[],controlLabel:()=>''},
  './androidNetwork':{releaseCameraNetwork(){}},
  './discovery':{discoveryAvailable:()=>true,discover:async()=>({cameras:[camera],diagnostics:[]})},

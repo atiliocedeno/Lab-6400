@@ -1,9 +1,10 @@
+import {exportDiagnostic} from './exportDiagnostic';
 import type {CapabilityReport} from './capabilities';
 import ValuePicker from './ValuePicker';
 import {recipeFields,controlLabel} from './recipeFields';
 import {releaseCameraNetwork} from './androidNetwork';
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, View, Text, Pressable, Share, StyleSheet } from 'react-native';
+import { Platform, AppState, View, Text, Pressable, Share, StyleSheet } from 'react-native';
 import { discover, discoveryAvailable } from './discovery';
 import { Camera } from './protocol';
 import { SonySession, Control, Plan, AdjustmentResult, CameraRejectedError, PartialApplicationError, VerificationError } from './session';
@@ -12,6 +13,9 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
     const [busy, setBusy] = useState(false), [status, setStatus] = useState('Sin conexión'), [error, setError] = useState('');
     const [cameras, setCameras] = useState<Camera[]>([]), [camera, setCamera] = useState<Camera | null>(null);
     const [settings, setSettings] = useState<Control[]>([]), [methods, setMethods] = useState<string[]>([]);
+    const [exportStatus,setExportStatus]=useState('');
+    const [exporting,setExporting]=useState(false);
+    const exportLock=useRef(false);
     const [capabilityReport,setCapabilityReport]=useState<CapabilityReport|null>(null);
     const [diagnostics, setDiagnostics] = useState<string[]>([]);
     const [picker,setPicker]=useState<Control|'recipes'|null>(null);
@@ -131,6 +135,15 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
             if(alive.current)setCapabilityReport(current.capabilityReport);
         }
     }
+    function diagnosticSnapshot(){return {time:new Date().toISOString(),native,camera,methods,status,error,diagnostics,recipe:recipe?.id,results,capabilityReport,trace:session.current?.trace??[]};}
+    async function saveDiagnostic(){
+        if(exportLock.current)return;
+        exportLock.current=true;setExporting(true);setExportStatus('');
+        const snapshot=diagnosticSnapshot();
+        try {const saved=await exportDiagnostic(snapshot);if(alive.current)setExportStatus(saved?'JSON completo guardado y verificado. Adjunta ese archivo desde la carpeta elegida.':'Guardado cancelado.');}
+        catch(e){if(alive.current)setExportStatus('No se pudo guardar: '+(e instanceof Error?e.message:String(e)));}
+        finally {exportLock.current=false;if(alive.current)setExporting(false);}
+    }
     async function refresh() {
         const current = session.current;
         if (!current)
@@ -196,7 +209,10 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
   }}/>}
   {capabilityReport&&<Text selectable style={s.note}>Informe de capacidades {capabilityReport.complete?'terminado':'incompleto'} · {capabilityReport.model} · {capabilityReport.reads.length} consultas · {capabilityReport.reads.filter(r=>r.error).length} errores. Incluido en «Compartir diagnóstico». No confirma todavía el envío de recetas.</Text>}
   {!!diagnostics.length && <Text selectable style={s.note}>{diagnostics.join('\n')}</Text>}
-  {<Button label={'Compartir diagnóstico'} onPress={() => { void Share.share({ message: JSON.stringify({ time: new Date().toISOString(), native, camera, methods, status, error, diagnostics, recipe:recipe?.id, results, capabilityReport, trace:session.current?.trace??[] }, null, 2) }).catch(() => setError('No se pudo compartir.')); }} busy={busy}/>}
+  {Platform.OS==='android'&&<Button label="Guardar diagnóstico completo (.json)" onPress={()=>{void saveDiagnostic();}} busy={busy||exporting}/>}
+  {!!exportStatus&&<Text selectable style={s.note}>{exportStatus}</Text>}
+  <Text style={s.note}>Compartir texto puede recortarse en la app de destino. En Android guarda el archivo JSON para conservar el informe completo.</Text>
+  {<Button label={'Compartir diagnóstico'} onPress={() => { void Share.share({ message: JSON.stringify(diagnosticSnapshot(), null, 2) }).catch(() => setError('No se pudo compartir.')); }} busy={busy}/>}
  </View>;
 }
 const s = StyleSheet.create({tab:{flex:1,padding:14,borderRadius:12,backgroundColor:'#101719',alignItems:'center'},tabActive:{backgroundColor:'#4a6543'},setting:{flexDirection:'row',alignItems:'center',gap:12,padding:16,borderRadius:12,backgroundColor:'#101719'},field:{padding:14,gap:8,borderRadius:12,backgroundColor:'#101719'},settingTop:{gap:6},check:{color:'#c6eb9e',paddingVertical:10,fontSize:14}, box: { gap: 16, padding: 20, borderRadius: 18, backgroundColor: '#1b272a' }, title: { color: '#c6eb9e', fontSize: 20, fontWeight: '600' }, text: { color: '#e4e8e3', fontSize: 15, lineHeight: 23 }, note: { color: '#a9b5b7', fontSize: 13, lineHeight: 20 }, input: { backgroundColor: '#101719', padding: 14, color: '#fff', borderRadius: 12 }, button: { padding: 13, backgroundColor: '#4a6543', borderRadius: 14 }, disabled: { opacity: 0.4 }, error: { color: '#ffbcaa', lineHeight: 22 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, group: { gap: 10, paddingVertical: 10 } });

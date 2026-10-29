@@ -49,3 +49,16 @@ npm run validate
 ```
 
 `npm run build:android` repeats validation and only invokes EAS if it passes.
+
+## 1.2.3 — Android JSON file export
+
+Added `Guardar diagnóstico completo (.json)` using the existing Expo FileSystem
+SAF module. Captures JSON before opening the system picker, writes UTF-8 and reads
+it back for exact equality. Text sharing remains available but destination apps
+may truncate it; the precise truncation point in the user's report is unknown.
+
+Export tests cover a 1,000-entry Unicode report, state mutation while the picker
+opens, permission cancellation, truncated read-back, and write failure. Full
+validation passed. OS picker behavior still requires a physical Android test.
+No new native dependency was introduced. Select a writable subfolder, then attach
+the saved JSON file rather than copying its contents into a message.
