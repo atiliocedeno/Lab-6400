@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local camera diagnostics and Python cache
+sony-ptp-diagnostico-*.json
+__pycache__/
