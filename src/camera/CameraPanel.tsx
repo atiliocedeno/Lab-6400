@@ -1,3 +1,4 @@
+import type {CapabilityReport} from './capabilities';
 import ValuePicker from './ValuePicker';
 import {recipeFields,controlLabel} from './recipeFields';
 import {releaseCameraNetwork} from './androidNetwork';
@@ -11,6 +12,7 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
     const [busy, setBusy] = useState(false), [status, setStatus] = useState('Sin conexión'), [error, setError] = useState('');
     const [cameras, setCameras] = useState<Camera[]>([]), [camera, setCamera] = useState<Camera | null>(null);
     const [settings, setSettings] = useState<Control[]>([]), [methods, setMethods] = useState<string[]>([]);
+    const [capabilityReport,setCapabilityReport]=useState<CapabilityReport|null>(null);
     const [diagnostics, setDiagnostics] = useState<string[]>([]);
     const [picker,setPicker]=useState<Control|'recipes'|null>(null);
     const [section,setSection]=useState<'controls'|'recipes'>('recipes');
@@ -71,6 +73,7 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
         setSettings([]);
         setPlan(null);
         setCameras([]);
+        setCapabilityReport(null);
         setDiagnostics([]);
         const controller = new AbortController();
         abort.current = controller;
@@ -114,6 +117,16 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
             throw e;
         }
     }
+    async function audit() {
+        const current=session.current;if(!current)return;
+        setStatus('Leyendo capacidades; no se envían ajustes…');
+        try {
+            await current.auditCapabilities();
+            if(alive.current&&session.current===current)setStatus('Comprobación terminada · comparte el diagnóstico');
+        } finally {
+            if(alive.current)setCapabilityReport(current.capabilityReport);
+        }
+    }
     async function refresh() {
         const current = session.current;
         if (!current)
@@ -137,6 +150,8 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
   {!!error && <Text selectable style={s.error}>{error}</Text>}
   {camera && <>
    <Text style={s.title}>{camera.model}</Text>
+   <Button label="Comprobar capacidades (solo lectura)" onPress={()=>{void run(audit);}} busy={busy}/>
+   <Text style={s.note}>Consulta métodos admitidos, parámetros y valores actuales. No cambia ajustes ni prueba disparos.</Text>
    {<Button label={'Actualizar controles'} onPress={() => { void run(refresh); }} busy={busy}/>}
    <View style={s.wrap}>{(['recipes','controls'] as const).map(value=><Pressable key={value} accessibilityRole="tab" accessibilityState={{selected:section===value}} onPress={()=>setSection(value)} style={[s.tab,section===value&&s.tabActive]}><Text style={s.text}>{value==='recipes'?'Recetas':'Controles'}</Text></Pressable>)}</View>
    {section==='controls'?<>
@@ -175,8 +190,9 @@ export default function CameraPanel({initialRecipe=null}:{initialRecipe?:Recipe|
     void run(async()=>{const current=session.current;if(!current)return;const next=await current.plan(selected);if(alive.current&&current===session.current)setPlan(next);});
    }else void run(async()=>{const current=session.current;if(!current)return;await current.setControl(selection.key,value);setResults([]);await refresh();});
   }}/>}
+  {capabilityReport&&<Text selectable style={s.note}>Informe de capacidades {capabilityReport.complete?'terminado':'incompleto'} · {capabilityReport.model} · {capabilityReport.reads.length} consultas · {capabilityReport.reads.filter(r=>r.error).length} errores. Incluido en «Compartir diagnóstico». No confirma todavía el envío de recetas.</Text>}
   {!!diagnostics.length && <Text selectable style={s.note}>{diagnostics.join('\n')}</Text>}
-  {<Button label={'Compartir diagnóstico'} onPress={() => { void Share.share({ message: JSON.stringify({ time: new Date().toISOString(), native, camera, methods, status, error, diagnostics, recipe:recipe?.id, results, trace:session.current?.trace??[] }, null, 2) }).catch(() => setError('No se pudo compartir.')); }} busy={busy}/>}
+  {<Button label={'Compartir diagnóstico'} onPress={() => { void Share.share({ message: JSON.stringify({ time: new Date().toISOString(), native, camera, methods, status, error, diagnostics, recipe:recipe?.id, results, capabilityReport, trace:session.current?.trace??[] }, null, 2) }).catch(() => setError('No se pudo compartir.')); }} busy={busy}/>}
  </View>;
 }
 const s = StyleSheet.create({tab:{flex:1,padding:14,borderRadius:12,backgroundColor:'#101719',alignItems:'center'},tabActive:{backgroundColor:'#4a6543'},setting:{flexDirection:'row',alignItems:'center',gap:12,padding:16,borderRadius:12,backgroundColor:'#101719'},field:{padding:14,gap:8,borderRadius:12,backgroundColor:'#101719'},settingTop:{gap:6},check:{color:'#c6eb9e',paddingVertical:10,fontSize:14}, box: { gap: 16, padding: 20, borderRadius: 18, backgroundColor: '#1b272a' }, title: { color: '#c6eb9e', fontSize: 20, fontWeight: '600' }, text: { color: '#e4e8e3', fontSize: 15, lineHeight: 23 }, note: { color: '#a9b5b7', fontSize: 13, lineHeight: 20 }, input: { backgroundColor: '#101719', padding: 14, color: '#fff', borderRadius: 12 }, button: { padding: 13, backgroundColor: '#4a6543', borderRadius: 14 }, disabled: { opacity: 0.4 }, error: { color: '#ffbcaa', lineHeight: 22 }, wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, group: { gap: 10, paddingVertical: 10 } });

@@ -54,6 +54,36 @@ global.fetch=async(url,init)=>{
  return {ok:true,text:async()=>JSON.stringify({id,result})};
 };
 (async()=>{
+ const normalFetch=global.fetch;
+ const auditCalls=[];
+ let auditFailure='none';
+ global.fetch=async(url,init)=>{
+  const {method,params,id}=JSON.parse(init.body);auditCalls.push({method,params});
+  if(method==='getAvailableApiList')return {ok:true,text:async()=>JSON.stringify({id,result:[['getWhiteBalance','setWhiteBalance','actTakePicture','getFormatStorage','getSupportedWhiteBalance']]})};
+  if(method==='getMethodTypes')return {ok:true,text:async()=>JSON.stringify({id,results:[['setWhiteBalance',['string','bool','int'],['int'],'1.0']]})};
+  if(method==='getApplicationInfo')return {ok:true,text:async()=>JSON.stringify({id,error:[12,'Not available']})};
+  if(method==='getWhiteBalance'&&auditFailure==='transport')throw Error('Disconnected');
+  if(method==='getWhiteBalance'&&auditFailure==='cancel'){audited.close();throw Error('Cancelled');}
+  if(method==='getWhiteBalance')return {ok:true,text:async()=>JSON.stringify({id,result:[{whiteBalanceMode:'Auto WB'}]})};
+  if(method==='getSupportedWhiteBalance')return {ok:true,text:async()=>JSON.stringify({id,result:[['Auto WB']]})};
+  throw Error('Unexpected audit operation '+method);
+ };
+ const audited=new SonySession(camera);
+ const audit=await audited.auditCapabilities();
+ assert.equal(audit.complete,true);
+ assert.deepEqual(auditCalls.map(c=>c.method),['getAvailableApiList','getApplicationInfo','getMethodTypes','getWhiteBalance','getSupportedWhiteBalance']);
+ assert.deepEqual(auditCalls.find(c=>c.method==='getMethodTypes').params,['']);
+ assert.equal(audit.reads.find(r=>r.method==='getMethodTypes').result[0][0],'setWhiteBalance');
+ assert.match(audit.reads.find(r=>r.method==='getApplicationInfo').error,/Not available/);
+ assert.ok(audit.finishedAt);
+ auditFailure='transport';await assert.rejects(audited.auditCapabilities(),/Disconnected/);
+ assert.equal(audited.capabilityReport.complete,false);
+ assert.equal(audited.capabilityReport.reads.at(-1).method,'getWhiteBalance');
+ assert.ok(audited.capabilityReport.reads[2].result);
+ auditFailure='cancel';await assert.rejects(audited.auditCapabilities(),/cancelada/);
+ assert.equal(audited.capabilityReport.complete,false);
+ const auditCount=auditCalls.length;await assert.rejects(audited.auditCapabilities(),/desconectada/);assert.equal(auditCalls.length,auditCount);
+ global.fetch=normalFetch;
  const s=new SonySession(camera);await s.connect();assert.equal((await s.readControls()).length,3);
  await s.setControl('IsoSpeedRate','200');assert.equal(iso,'200');
  await assert.rejects(s.setControl('IsoSpeedRate','999'),/disponible/);

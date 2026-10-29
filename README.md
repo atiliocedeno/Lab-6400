@@ -106,3 +106,33 @@ Pendiente: verificar acceso remoto a estilo/efecto, contraste, saturación, niti
 ajuste fino WB y DRO en la A6400. Sony lista ILCE-6400 en Camera Remote Command,
 pero eso no demuestra soporte de todos esos parámetros ni PTP-IP para este modelo.
 No se ha implementado ni probado un transporte PTP/USB.
+
+### Comprobación de capacidades (1.2.1)
+
+En Cámara, después de conectar, pulsa **Comprobar capacidades (solo lectura)**.
+Después pulsa **Compartir diagnóstico**: el JSON incluye `capabilityReport` con
+fecha, modelo anunciado, endpoint, métodos disponibles, respuestas y errores.
+El informe permanece en la pantalla después de desconectar o interrumpir la
+consulta; una nueva búsqueda lo borra. No se guarda entre reinicios de la app.
+
+La comprobación consulta `getAvailableApiList`, `getApplicationInfo` y
+`getMethodTypes` con `[""]` (todas las versiones). La última respuesta usa
+`results`, en plural, según la especificación de Sony. Consulta también una
+lista cerrada de getters de exposición, WB y ColorSetting, únicamente si están
+anunciados como disponibles. No ejecuta setters, disparos, cambios de modo ni
+nombres arbitrarios recibidos de la cámara. La conexión previa conserva su
+inicialización habitual de control remoto; el botón de comprobación no la repite.
+
+Un rechazo explícito de una consulta se registra y permite continuar. Un fallo de
+transporte o cancelación detiene la comprobación y conserva las respuestas
+recibidas, con `complete: false`. `complete: true` significa que terminó la
+secuencia de consultas; hay que revisar igualmente los errores de cada lectura.
+No se envía el informe automáticamente.
+
+**Límites:** métodos disponibles dependen del estado actual; un método anunciado
+no demuestra que un ajuste concreto pueda escribirse. ColorSetting no equivale
+a Creative Style. Este informe cubre el servicio Wi-Fi `camera`, no PTP/USB ni
+otros servicios. No habilita recetas completas: todavía falta verificar los
+comandos de estilo, contraste, saturación, nitidez, ajuste fino WB y DRO.
+
+Referencia: [Sony Camera Remote API 2.40, información del servidor, páginas 251–254](https://be-bright.github.io/assets/documents/Sony_CameraRemoteAPIbeta_API-Reference_v2.40.pdf).

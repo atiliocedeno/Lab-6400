@@ -1,3 +1,4 @@
+import {collectCapabilities,CapabilityReport} from './capabilities';
 import type {Recipe} from '../guide';
 import {Camera,request} from './protocol';
 
@@ -16,6 +17,7 @@ export class PartialApplicationError extends Error {
 }
 export class SonySession {
  methods:string[]=[];
+ capabilityReport:CapabilityReport|null=null;
  trace:{method:string;params:unknown[];result?:unknown[];error?:unknown}[]=[];
  private id=0;
  private lifetime=new AbortController();
@@ -28,15 +30,24 @@ export class SonySession {
   const text=await request(this.camera.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method,params,id,version:'1.0'})},this.lifetime.signal);
   let data;
   try{data=JSON.parse(text);}catch{throw new Error('La cámara devolvió una respuesta que no es JSON.');}
+  // Introspection uses plural `results` in Sony's documented wire format.
+  const result=method==='getMethodTypes'?data.results:data.result;
   if(/^(get|set)/.test(method)){
-   this.trace.push({method,params,result:data.result,error:data.error});
+   this.trace.push({method,params,result,error:data.error});
    this.trace=this.trace.slice(-40);
   }
   if(data.id!==id)throw new Error('Respuesta fuera de secuencia.');
   if(Array.isArray(data.error))throw new CameraRejectedError(`Sony ${data.error[0]}: ${String(data.error[1]??'Operación rechazada')}`);
-  if(!Array.isArray(data.result))throw new Error('Respuesta Sony inválida.');
-  return data.result;
+  if(!Array.isArray(result))throw new Error('Respuesta Sony inválida.');
+  return result;
  }
+ async auditCapabilities(){return this.exclusive(async()=>{
+  const report:CapabilityReport={schemaVersion:1,startedAt:new Date().toISOString(),
+   endpoint:this.camera.endpoint,model:this.camera.model,complete:false,availableMethods:[],reads:[],
+   scope:'Solo servicio camera por Wi-Fi y estado actual. Un método anunciado no demuestra que un ajuste sea escribible. La ausencia no demuestra incompatibilidad por otros protocolos. ColorSetting no equivale a Creative Style.'};
+  this.capabilityReport=report;
+  return collectCapabilities(report,(method,params)=>this.call(method,params),e=>e instanceof CameraRejectedError);
+ });}
  async refresh(){
   const result=await this.call('getAvailableApiList');
   if(!Array.isArray(result[0])||!result[0].every(v=>typeof v==='string'))throw new Error('Lista de capacidades inválida.');
